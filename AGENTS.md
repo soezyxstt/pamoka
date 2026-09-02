@@ -187,24 +187,35 @@ All uploads go through **UploadThing** only. There is no R2, S3, or local-blob w
 | 004 | Add annual CMS data models, revisions, and transactional audit logs | DONE |
 | 005 | Build the reusable admin shell, dashboard, users, profile, and audit UI | DONE |
 | 006 | Add the media library with authenticated UploadThing uploads | DONE |
-| 007 | Move global, home, news, sponsor, and organization content into the CMS | IN PROGRESS |
-| 008 | Move editions, participants, events, carousels, and galleries into the CMS | IN PROGRESS |
-| 009 | Make voting campaigns, tallies, visibility, and results manageable | IN PROGRESS |
+| 007 | Move global, home, news, sponsor, and organization content into the CMS | DONE |
+| 008 | Move editions, participants, events, carousels, and galleries into the CMS | DONE |
+| 009 | Make voting campaigns, tallies, visibility, and results manageable | DONE |
 | 010 | Import 2025 content, run end-to-end QA, and perform a reversible cutover | IN PROGRESS (not authorized) |
-| 011 | Unify public and admin design, media navigation, and annual CMS context | IN PROGRESS |
+| 011 | Unify public and admin design, media navigation, and annual CMS context | DONE |
+| 012 | Admin CMS PAMOKA Berbasis Edisi | DONE |
 
 ### Verified / working
 
-- Turso (libSQL) + Drizzle data layer with the seed of 44 finalists and 572 zero-income daily rows over 13 dates (`npm.cmd run db:seed`; refuses non-seed databases).
+- Turso (libSQL) + Drizzle data layer with the seed of 44 finalists and 572 zero-income daily rows over 13 dates (`npm run db:seed`; refuses non-seed databases).
 - Better Auth Google login with pending access requests, composable roles, permission overrides, and transactional audit. No automatic super-admin bootstrap; the first super admin is promoted manually in Turso per `docs/runbooks/bootstrap-super-admin.md`.
-- Admin shell with permission-filtered navigation (`/admin`), content editors, media library, users, and audit pages. Voting uses an annual campaign workspace, finalis-only edition isolation, per-participant QRIS media, manual daily merchant aggregates, optimistic tally updates, and transactional audit.
-- Public routes: `/`, `/tentang`, `/rangkaian-kegiatan`, `/voting`, `/profil-finalis`, `/voting/hasil`, `/monitor` (auth-gated voting viewer). `/voting/*` is gated by the deadline in `src/proxy.ts`.
-- Plan 011 is complete locally: the established public presentation remains hard-coded and is the visual source of truth, while admin uses its backgrounds, vignette, translucent surfaces, typography, and brand palette. CMS context and persisted media folders are retained. Migration `0004` is generated but not applied to any target.
+- Admin shell with permission-filtered navigation (`/admin`), active edition selector in header with cookie persistence, collapsible content sidebar, reusable media picker (`AdminMediaPicker`), and edition-scoped folders.
+- Complete Plan 012 implementation:
+  * Identitas edisi & program unggulan (`/admin/content/edition-settings`).
+  * Aset situs tetap dengan 7 slot manifest terdefinisi (`/admin/content/site-assets`).
+  * Manajemen sponsor dengan modal sheet editor, tier grouping, dan live card preview (`/admin/content/sponsors`).
+  * Studio berita TipTap WYSIWYG dengan image insertion, autosave draft, dan live split preview (`/admin/content/news`).
+  * Kepengurusan organisasi multi-periode dengan struktur pohon hierarkis dan direktori orang (`/admin/organization`).
+  * Panitia pelaksana terisolasi per edisi dengan struktur pohon hingga 4 level (`/admin/content/committee`).
+  * Manajemen peserta Mojang Jajaka dengan kategori baku (JD, MD, JR, MR), prestasi, sosial media, galeri foto multi-role, dan QRIS voting (`/admin/content/participants`).
+  * Rangkaian acara dan studio galeri terpadu dengan album standalone/event, video YouTube, dan live split preview (`/admin/content/events`, `/admin/content/galleries`).
+  * Operasional voting terisolasi per edisi dengan rekap tally harian merchant QRIS dan switch visibilitas hasil (`/admin/voting`).
+  * Dashboard utama dengan panel checklist kesiapan edisi (8 indikator kesiapan) dan pintas navigasi cepat (`/admin`).
+- Public routes remain intact and live: `/`, `/tentang`, `/rangkaian-kegiatan`, `/voting`, `/profil-finalis`, `/voting/hasil`, `/monitor`.
 - Baseline commit for the plans drift check: `3874ede`.
 
 ### Blockers
 
-- Plan 010 cutover (public runtime switch to CMS data) is intentionally deferred until the operator authorizes it. Until then the hard-coded site stays live.
+- Plan 010 cutover (public runtime switch to live CMS data) is intentionally deferred until the operator authorizes it. Until then the hard-coded site stays live.
 
 ---
 

@@ -204,3 +204,14 @@ export function AdminListRow({ title, meta, action, children }: { title: ReactNo
     </article>
   );
 }
+
+export {
+  AdminMediaPicker,
+  AdminMediaField,
+  AdminMediaPreview,
+  type AdminMediaPickerProps,
+  type AdminMediaFieldProps,
+  type MediaAssetSummary,
+  type MediaFolderSummary,
+} from "./media-picker";
+

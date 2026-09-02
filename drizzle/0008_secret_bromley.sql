@@ -1,0 +1,1 @@
+ALTER TABLE `newsArticle` ADD `bodyJson` text;

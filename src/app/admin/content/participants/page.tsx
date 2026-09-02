@@ -1,52 +1,189 @@
-import { desc, eq, like } from "drizzle-orm";
-import { Plus, QrCode, UserRound } from "lucide-react";
-import { AdminBadge, AdminButton, AdminCard, AdminCardHeader, AdminEmptyState, AdminField, AdminInput, AdminListRow, AdminPage, AdminSelect, AdminTextarea } from "@/components/admin/primitives";
+import { asc, eq } from "drizzle-orm";
+
+import { AdminBadge, AdminCard, AdminEmptyState, AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
+import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
-import { categories, editions, mediaAssets, participants } from "@/server/db/schema";
-import { createParticipantAction, updateParticipantQrisAction } from "./actions";
+import {
+  categories,
+  mediaAssets,
+  participantAchievements,
+  participantMedia,
+  participantSocialLinks,
+  participants,
+} from "@/server/db/schema";
+import {
+  ParticipantsListClient,
+  type CategoryOption,
+  type ParticipantItem,
+} from "./participants-list-client";
+
+export const metadata = { title: "Mojang Jajaka" };
 
 export default async function ParticipantsPage() {
-  await requirePermission("content.view");
-  const [editionRows, categoryRows, qrisAssets, rows] = await Promise.all([
-    database.select().from(editions).orderBy(desc(editions.year)),
-    database.select({ id: categories.id, label: categories.label, editionId: categories.editionId, year: editions.year }).from(categories).innerJoin(editions, eq(categories.editionId, editions.id)).orderBy(desc(editions.year), categories.displayOrder),
-    database.select({ id: mediaAssets.id, filename: mediaAssets.filename }).from(mediaAssets).where(like(mediaAssets.mimeType, "image/%")).orderBy(desc(mediaAssets.createdAt)).limit(200),
-    database.select({ id: participants.id, name: participants.name, number: participants.number, stage: participants.stage, category: categories.label, year: editions.year, qrisMediaId: participants.qrisMediaId }).from(participants).leftJoin(categories, eq(participants.categoryId, categories.id)).leftJoin(editions, eq(participants.editionId, editions.id)).orderBy(desc(editions.year), participants.displayOrder),
-  ]);
+  const { effectivePermissions } = await requirePermission("content.view");
+  const canEdit = effectivePermissions.has("participants.manage") || effectivePermissions.has("content.edit");
+  const canManageMedia = effectivePermissions.has("media.manage");
+
+  const currentEdition = await getAdminEditionContext();
+
+  if (!currentEdition) {
+    return (
+      <AdminPage
+        eyebrow="Konten / peserta"
+        title="Mojang Jajaka"
+        description="Kelola peserta, kategori, dan tahap seleksi Pasanggiri Mojang Jajaka Garut."
+      >
+        <AdminCard>
+          <div className="p-8">
+            <AdminEmptyState
+              icon="users"
+              title="Belum ada edisi dipilih"
+              description="Silakan buat atau pilih edisi pada selector di header untuk mengelola peserta."
+            />
+          </div>
+        </AdminCard>
+      </AdminPage>
+    );
+  }
+
+  // Fetch categories of the current edition
+  const categoryRows = await database
+    .select({
+      id: categories.id,
+      code: categories.code,
+      label: categories.label,
+    })
+    .from(categories)
+    .where(eq(categories.editionId, currentEdition.id))
+    .orderBy(asc(categories.displayOrder));
+
+  const categoryOptions: CategoryOption[] = categoryRows.map((c) => ({
+    id: c.id,
+    code: c.code,
+    label: c.label,
+  }));
+
+  // Fetch participants with joined category and mediaAssets
+  const participantRows = await database
+    .select({
+      id: participants.id,
+      editionId: participants.editionId,
+      categoryId: participants.categoryId,
+      categoryCode: categories.code,
+      categoryLabel: categories.label,
+      number: participants.number,
+      name: participants.name,
+      slug: participants.slug,
+      stage: participants.stage,
+      bio: participants.bio,
+      portraitMediaId: participants.portraitMediaId,
+      qrisMediaId: participants.qrisMediaId,
+      paymentUrl: participants.paymentUrl,
+      displayOrder: participants.displayOrder,
+      active: participants.active,
+      version: participants.version,
+    })
+    .from(participants)
+    .innerJoin(categories, eq(participants.categoryId, categories.id))
+    .where(eq(participants.editionId, currentEdition.id))
+    .orderBy(asc(participants.displayOrder), asc(participants.number));
+
+  const participantIds = participantRows.map((p) => p.id);
+
+  // Fetch media assets for portraits & qris
+  const portraitMediaIds = participantRows.map((p) => p.portraitMediaId).filter(Boolean) as string[];
+  const qrisMediaIds = participantRows.map((p) => p.qrisMediaId).filter(Boolean) as string[];
+  const allMediaIds = Array.from(new Set([...portraitMediaIds, ...qrisMediaIds]));
+
+  const mediaMap = new Map<string, { url: string; alt: string | null }>();
+  if (allMediaIds.length > 0) {
+    const assets = await database
+      .select({ id: mediaAssets.id, url: mediaAssets.url, alt: mediaAssets.alt })
+      .from(mediaAssets);
+    for (const a of assets) {
+      mediaMap.set(a.id, { url: a.url, alt: a.alt });
+    }
+  }
+
+  // Fetch count of achievements, social links, and media per participant
+  const achievementsCounts = new Map<string, number>();
+  const socialLinksCounts = new Map<string, number>();
+  const mediaCounts = new Map<string, number>();
+  const closeupMap = new Map<string, boolean>();
+
+  if (participantIds.length > 0) {
+    const [achievements, socialLinks, mediaItems] = await Promise.all([
+      database.select({ id: participantAchievements.id, participantId: participantAchievements.participantId }).from(participantAchievements),
+      database.select({ id: participantSocialLinks.id, participantId: participantSocialLinks.participantId }).from(participantSocialLinks),
+      database.select({ id: participantMedia.id, participantId: participantMedia.participantId, role: participantMedia.role }).from(participantMedia),
+    ]);
+
+    for (const a of achievements) {
+      achievementsCounts.set(a.participantId, (achievementsCounts.get(a.participantId) ?? 0) + 1);
+    }
+    for (const s of socialLinks) {
+      socialLinksCounts.set(s.participantId, (socialLinksCounts.get(s.participantId) ?? 0) + 1);
+    }
+    for (const m of mediaItems) {
+      mediaCounts.set(m.participantId, (mediaCounts.get(m.participantId) ?? 0) + 1);
+      if (m.role === "closeup") {
+        closeupMap.set(m.participantId, true);
+      }
+    }
+  }
+
+  const initialParticipants: ParticipantItem[] = participantRows.map((row) => {
+    const portraitAsset = row.portraitMediaId ? mediaMap.get(row.portraitMediaId) : null;
+    const qrisAsset = row.qrisMediaId ? mediaMap.get(row.qrisMediaId) : null;
+    const hasCloseup = closeupMap.get(row.id) ?? Boolean(row.portraitMediaId);
+
+    return {
+      id: row.id,
+      editionId: row.editionId,
+      categoryId: row.categoryId,
+      categoryCode: row.categoryCode,
+      categoryLabel: row.categoryLabel,
+      number: row.number,
+      name: row.name,
+      slug: row.slug,
+      stage: row.stage,
+      bio: row.bio,
+      portraitMediaId: row.portraitMediaId,
+      portraitUrl: portraitAsset?.url ?? null,
+      portraitAlt: portraitAsset?.alt ?? null,
+      qrisMediaId: row.qrisMediaId,
+      qrisUrl: qrisAsset?.url ?? null,
+      paymentUrl: row.paymentUrl,
+      displayOrder: row.displayOrder,
+      active: row.active,
+      version: row.version,
+      achievementsCount: achievementsCounts.get(row.id) ?? 0,
+      socialLinksCount: socialLinksCounts.get(row.id) ?? 0,
+      mediaCount: mediaCounts.get(row.id) ?? 0,
+      hasCloseup,
+    };
+  });
+
   return (
-    <AdminPage eyebrow="Studio / participants" title="Mojang Jajaka" description="Kelola peserta, kategori, dan tahap seleksi sebelum profil masuk ke pengalaman publik.">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-        <AdminCard>
-          <AdminCardHeader eyebrow="Peserta baru" title="Simpan draft peserta" description="Lengkapi identitas dasar dan kategori peserta." />
-          <form action={createParticipantAction} className="grid gap-4 sm:grid-cols-2">
-            <AdminField label="Edisi"><AdminSelect name="editionId" required><option value="">Pilih edisi</option>{editionRows.map((edition) => <option key={edition.id} value={edition.id}>{edition.name}</option>)}</AdminSelect></AdminField>
-            <AdminField label="Kategori"><AdminSelect name="categoryId" required><option value="">Pilih kategori</option>{categoryRows.map((category) => <option key={category.id} value={category.id}>{category.year} · {category.label}</option>)}</AdminSelect></AdminField>
-            <AdminField label="Nama" className="sm:col-span-2"><AdminInput name="name" placeholder="Nama peserta" required /></AdminField>
-            <AdminField label="Slug"><AdminInput name="slug" placeholder="slug-profil" required /></AdminField>
-            <AdminField label="Nomor"><AdminInput type="number" min="1" name="number" placeholder="01" required /></AdminField>
-            <AdminField label="Tahap"><AdminSelect name="stage"><option value="semifinalis">Semifinalis</option><option value="finalis">Finalis</option></AdminSelect></AdminField>
-            <AdminField label="Gambar QRIS" hint="Pilih aset yang sudah diunggah ke pustaka media."><AdminSelect name="qrisMediaId"><option value="">Belum ditetapkan</option>{qrisAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.filename}</option>)}</AdminSelect></AdminField>
-            <AdminField label="URL pembayaran" hint="Opsional jika QRIS juga memiliki tautan pembayaran."><AdminInput type="url" name="paymentUrl" placeholder="https://..." /></AdminField>
-            <AdminField label="Bio" className="sm:col-span-2"><AdminTextarea name="bio" placeholder="Bio singkat peserta" /></AdminField>
-            <AdminButton type="submit" className="sm:col-span-2"><Plus size={16} /> Simpan draft peserta</AdminButton>
-          </form>
-        </AdminCard>
-        <AdminCard>
-          <AdminCardHeader eyebrow="Daftar peserta" title="Peserta terbaru" description={`${rows.length} peserta tersimpan di database.`} />
-          <div className="space-y-3">{rows.length === 0 ? <AdminEmptyState icon="users" title="Belum ada peserta" description="Simpan draft peserta pertama dari panel di sebelah kiri." /> : rows.map((row) => <AdminListRow key={row.id} title={<span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-md bg-dgb-50 text-xs font-semibold text-dgb">{row.number}</span>{row.name}</span>} meta={<span className="flex items-center gap-2"><UserRound size={14} /> {row.year} · {row.category ?? "Tanpa kategori"} · <QrCode size={13} className={row.qrisMediaId ? "text-dgb" : "text-destructive"} /> {row.qrisMediaId ? "QRIS siap" : "QRIS belum ada"}</span>} action={<AdminBadge value={row.stage} />} />)}</div>
-        </AdminCard>
-      </div>
-      <AdminCard className="mt-6">
-        <AdminCardHeader title="Tetapkan QRIS peserta" description="Gunakan form ini jika peserta sudah dibuat sebelum aset QRIS tersedia atau QRIS perlu diganti." />
-        <form action={updateParticipantQrisAction} className="grid gap-4 border-t border-dgb-100 pt-5 md:grid-cols-2 xl:grid-cols-4">
-          <AdminField label="Peserta"><AdminSelect name="participantId" required><option value="">Pilih peserta</option>{rows.map((row) => <option key={row.id} value={row.id}>{row.year} · {row.category} · {row.name}</option>)}</AdminSelect></AdminField>
-          <AdminField label="Gambar QRIS"><AdminSelect name="qrisMediaId"><option value="">Kosongkan QRIS</option>{qrisAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.filename}</option>)}</AdminSelect></AdminField>
-          <AdminField label="URL pembayaran"><AdminInput type="url" name="paymentUrl" placeholder="https://..." /></AdminField>
-          <AdminField label="Alasan perubahan"><AdminInput name="reason" placeholder="QRIS untuk kampanye 2026" required /></AdminField>
-          <AdminButton type="submit" className="md:col-span-2 xl:col-span-4"><QrCode size={16} /> Simpan QRIS peserta</AdminButton>
-        </form>
-      </AdminCard>
+    <AdminPage
+      eyebrow="Konten / peserta"
+      title="Mojang Jajaka"
+      description={`Kelola identitas peserta, prestasi, tautan sosial media, galeri foto, dan QRIS untuk ${currentEdition.name} (${currentEdition.year}).`}
+      action={<AdminBadge value={currentEdition.lifecycle} />}
+    >
+      <ParticipantsListClient
+        edition={{
+          id: currentEdition.id,
+          year: currentEdition.year,
+          name: currentEdition.name,
+          lifecycle: currentEdition.lifecycle,
+        }}
+        categories={categoryOptions}
+        initialParticipants={initialParticipants}
+        canEdit={canEdit}
+        canManageMedia={canManageMedia}
+      />
     </AdminPage>
   );
 }

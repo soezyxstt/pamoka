@@ -7,6 +7,8 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/server/auth/config';
 import { ensurePendingAdminProfile, getEffectivePermissions } from '@/server/auth/authorization';
 
+export const dynamic = 'force-dynamic';
+
 export default async function MonitorPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) redirect('/admin/login');

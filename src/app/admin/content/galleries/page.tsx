@@ -1,26 +1,134 @@
-import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { ArrowRight, Images } from "lucide-react";
-import { AdminBadge, AdminCard, AdminCardHeader, AdminEmptyState, AdminListRow, AdminPage } from "@/components/admin/primitives";
-import { requirePermission } from "@/server/auth/authorization";
-import { database } from "@/server/db/client";
-import { galleries, galleryItems } from "@/server/db/schema";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 
-export default async function GalleriesPage() {
-  await requirePermission("content.view");
-  const rows = await database.select({ id: galleries.id, title: galleries.title, ownerType: galleries.ownerType, ownerId: galleries.ownerId, itemId: galleryItems.id }).from(galleries).leftJoin(galleryItems, eq(galleries.id, galleryItems.galleryId));
-  const grouped = new Map<string, { title: string; ownerType: string; ownerId: string; count: number }>();
-  for (const row of rows) {
-    const current = grouped.get(row.id) ?? { title: row.title, ownerType: row.ownerType, ownerId: row.ownerId, count: 0 };
-    if (row.itemId) current.count++;
-    grouped.set(row.id, current);
+import { AdminPage } from "@/components/admin/primitives";
+import { requirePermission } from "@/server/auth/authorization";
+import { getAdminEditionContext } from "@/server/cms/context";
+import { database } from "@/server/db/client";
+import { events, galleries, galleryItems, mediaAssets } from "@/server/db/schema";
+import {
+  GalleriesListClient,
+  type GalleryListItem,
+} from "./galleries-list-client";
+
+export const metadata = { title: "Galeri & Album" };
+
+export type GalleriesPageProps = {
+  searchParams: Promise<{ eventId?: string }>;
+};
+
+export default async function GalleriesPage(props: GalleriesPageProps) {
+  const actor = await requirePermission("content.view");
+  const currentEdition = await getAdminEditionContext();
+  const searchParams = await props.searchParams;
+  const filterEventId = searchParams.eventId;
+
+  if (!currentEdition) {
+    return (
+      <AdminPage
+        eyebrow="Studio / gallery"
+        title="Galeri & Album Dokumentasi"
+        description="Silakan pilih edisi aktif terlebih dahulu untuk mengelola album galeri."
+      >
+        <div className="p-8 text-center text-muted-foreground text-sm">
+          Tidak ada edisi yang aktif.
+        </div>
+      </AdminPage>
+    );
   }
+
+  // Fetch galleries for current edition with cover media and events
+  const rawGalleries = await database
+    .select({
+      id: galleries.id,
+      title: galleries.title,
+      slug: galleries.slug,
+      description: galleries.description,
+      ownerType: galleries.ownerType,
+      ownerId: galleries.ownerId,
+      displayOrder: galleries.displayOrder,
+      status: galleries.status,
+      active: galleries.active,
+      coverMediaId: galleries.coverMediaId,
+      coverUrl: mediaAssets.url,
+      coverAlt: mediaAssets.alt,
+    })
+    .from(galleries)
+    .leftJoin(mediaAssets, eq(galleries.coverMediaId, mediaAssets.id))
+    .where(eq(galleries.editionId, currentEdition.id))
+    .orderBy(asc(galleries.displayOrder));
+
+  // Get item counts per gallery
+  const itemCounts = await database
+    .select({
+      galleryId: galleryItems.galleryId,
+      totalCount: sql<number>`count(${galleryItems.id})`.mapWith(Number),
+      photoCount: sql<number>`sum(case when ${galleryItems.mediaId} is not null then 1 else 0 end)`.mapWith(Number),
+      videoCount: sql<number>`sum(case when ${galleryItems.youtubeId} is not null then 1 else 0 end)`.mapWith(Number),
+    })
+    .from(galleryItems)
+    .groupBy(galleryItems.galleryId);
+
+  const itemCountMap = new Map<string, { total: number; photo: number; video: number }>();
+  for (const row of itemCounts) {
+    itemCountMap.set(row.galleryId, {
+      total: row.totalCount ?? 0,
+      photo: row.photoCount ?? 0,
+      video: row.videoCount ?? 0,
+    });
+  }
+
+  // Fetch event labels for event-owned galleries
+  const eventIds = rawGalleries
+    .filter((g) => g.ownerType === "event")
+    .map((g) => g.ownerId);
+
+  const eventLabelMap = new Map<string, string>();
+  if (eventIds.length > 0) {
+    const eventRows = await database
+      .select({ id: events.id, label: events.label })
+      .from(events)
+      .where(inArray(events.id, eventIds));
+    for (const ev of eventRows) {
+      eventLabelMap.set(ev.id, ev.label);
+    }
+  }
+
+  const initialGalleries: GalleryListItem[] = rawGalleries.map((g) => {
+    const counts = itemCountMap.get(g.id) ?? { total: 0, photo: 0, video: 0 };
+    return {
+      id: g.id,
+      title: g.title,
+      slug: g.slug,
+      description: g.description,
+      ownerType: g.ownerType as "standalone" | "event",
+      ownerId: g.ownerId,
+      ownerLabel: g.ownerType === "event" ? eventLabelMap.get(g.ownerId) ?? null : null,
+      displayOrder: g.displayOrder,
+      status: g.status,
+      active: Boolean(g.active),
+      coverUrl: g.coverUrl,
+      coverAlt: g.coverAlt,
+      itemCount: counts.total,
+      photoCount: counts.photo,
+      videoCount: counts.video,
+    };
+  });
+
+  const canEdit = actor.effectivePermissions.has("gallery.manage");
+
   return (
-    <AdminPage eyebrow="Studio / gallery" title="Galeri" description="Galeri acara dibuat dan diurutkan dari editor acara agar hubungan konten tetap jelas.">
-      <AdminCard>
-        <AdminCardHeader eyebrow="Koleksi galeri" title="Galeri yang terhubung" description="Buka editor acara untuk menambah atau mengurutkan item carousel." action={<Link href="/admin/content/events" className="inline-flex h-10 items-center gap-2 rounded-md bg-dgb px-4 text-sm font-semibold text-white transition hover:bg-dgb-600">Buka editor acara <ArrowRight size={15} /></Link>} />
-        <div className="space-y-3">{grouped.size === 0 ? <AdminEmptyState icon="images" title="Belum ada galeri" description="Galeri akan muncul setelah sebuah item ditambahkan dari editor acara." /> : [...grouped.entries()].map(([id, gallery]) => <AdminListRow key={id} title={<span className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-700"><Images size={15} /></span>{gallery.title}</span>} meta={`${gallery.ownerType} · ${gallery.count} item`} action={<AdminBadge value="ready" />} />)}</div>
-      </AdminCard>
+    <AdminPage
+      eyebrow="Studio / gallery"
+      title="Galeri & Album Dokumentasi"
+      description={`Kelola album foto dan video dokumentasi untuk ${currentEdition.name} (${currentEdition.year}).`}
+    >
+      <GalleriesListClient
+        initialGalleries={initialGalleries}
+        editionName={currentEdition.name}
+        editionId={currentEdition.id}
+        filterEventId={filterEventId}
+        canEdit={canEdit}
+      />
     </AdminPage>
   );
 }

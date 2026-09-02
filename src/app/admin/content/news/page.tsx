@@ -1,33 +1,85 @@
-import { desc } from "drizzle-orm";
-import { Newspaper, Plus } from "lucide-react";
+import { desc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
-import { AdminBadge, AdminButton, AdminCard, AdminCardHeader, AdminEmptyState, AdminField, AdminInput, AdminListRow, AdminPage, AdminTextarea } from "@/components/admin/primitives";
+import { AdminBadge, AdminPage } from "@/components/admin/primitives";
+import { Button } from "@/components/ui/button";
 import { requirePermission } from "@/server/auth/authorization";
+import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
-import { newsArticles } from "@/server/db/schema";
-import { createNewsAction } from "./actions";
+import { mediaAssets, newsArticles } from "@/server/db/schema";
+import { NewsListClient } from "./news-list-client";
+
+export const metadata = { title: "Berita" };
 
 export default async function NewsPage() {
-  await requirePermission("content.view");
-  const rows = await database.select().from(newsArticles).orderBy(desc(newsArticles.createdAt));
+  const actor = await requirePermission("content.view");
+  const currentEdition = await getAdminEditionContext();
+
+  const rows = await database
+    .select({
+      id: newsArticles.id,
+      title: newsArticles.title,
+      slug: newsArticles.slug,
+      excerpt: newsArticles.excerpt,
+      status: newsArticles.status,
+      version: newsArticles.version,
+      publishedAt: newsArticles.publishedAt,
+      createdAt: newsArticles.createdAt,
+      coverUrl: mediaAssets.url,
+      coverAlt: mediaAssets.alt,
+    })
+    .from(newsArticles)
+    .leftJoin(mediaAssets, eq(newsArticles.coverMediaId, mediaAssets.id))
+    .where(currentEdition ? eq(newsArticles.editionId, currentEdition.id) : undefined)
+    .orderBy(desc(newsArticles.createdAt));
+
+  const articles = rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    slug: r.slug,
+    excerpt: r.excerpt,
+    status: r.status,
+    version: r.version,
+    publishedAt: r.publishedAt ? r.publishedAt.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+    coverUrl: r.coverUrl,
+    coverAlt: r.coverAlt,
+  }));
+
+  const canEdit =
+    actor.effectivePermissions.has("content.edit") ||
+    actor.effectivePermissions.has("news.manage");
+
   return (
-    <AdminPage eyebrow="Studio / editorial" title="Berita" description="Tulis berita sebagai draft, cek kembali isinya, lalu lanjutkan ke tahap preview sebelum tayang.">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <AdminCard>
-          <AdminCardHeader eyebrow="Artikel baru" title="Mulai cerita" description="Judul dan slug harus unik agar halaman publik mudah dibagikan." />
-          <form action={createNewsAction} className="space-y-4">
-            <AdminField label="Judul"><AdminInput name="title" placeholder="Judul berita" required /></AdminField>
-            <AdminField label="Slug"><AdminInput name="slug" placeholder="judul-berita" required /></AdminField>
-            <AdminField label="Ringkasan"><AdminTextarea name="excerpt" placeholder="Ringkasan singkat untuk kartu berita" /></AdminField>
-            <p className="rounded-lg bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">Berita dibuat sebagai draft dan harus dipreview sebelum ditayangkan.</p>
-            <AdminButton type="submit"><Plus size={16} /> Buat draft</AdminButton>
-          </form>
-        </AdminCard>
-        <AdminCard>
-          <AdminCardHeader eyebrow="Koleksi berita" title="Artikel terbaru" description={`${rows.length} artikel tersimpan di CMS.`} />
-          <div className="space-y-3">{rows.length === 0 ? <AdminEmptyState icon="file" title="Belum ada berita" description="Mulai dengan membuat draft artikel pertama." /> : rows.map((row) => <AdminListRow key={row.id} title={row.title} meta={`/${row.slug} · versi ${row.version}`} action={<AdminBadge value={row.status} />}><div className="flex items-center gap-2 text-xs text-muted-foreground"><Newspaper size={14} /> Dibuat {row.createdAt.toLocaleDateString("id-ID")}</div></AdminListRow>)}</div>
-        </AdminCard>
-      </div>
+    <AdminPage
+      eyebrow="Studio / editorial"
+      title="Berita"
+      description={
+        currentEdition
+          ? `Kelola dan publikasikan artikel berita untuk ${currentEdition.name} (${currentEdition.year}).`
+          : "Kelola artikel berita, draft konten, dan publikasi."
+      }
+      action={
+        currentEdition ? (
+          <div className="flex items-center gap-2">
+            <AdminBadge value={currentEdition.lifecycle} />
+            {canEdit && (
+              <Link href="/admin/content/news/new">
+                <Button size="sm" className="h-8 gap-1.5 bg-dgb text-xs font-semibold text-white hover:bg-dgb-600">
+                  <Plus size={14} /> Tulis berita baru
+                </Button>
+              </Link>
+            )}
+          </div>
+        ) : null
+      }
+    >
+      <NewsListClient
+        initialArticles={articles}
+        editionName={currentEdition?.name ?? "Edisi Aktif"}
+        canEdit={canEdit}
+      />
     </AdminPage>
   );
 }

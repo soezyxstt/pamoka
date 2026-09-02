@@ -1,12 +1,12 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, like, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { appendAuditLog } from "@/server/auth/audit";
 import { requirePermission } from "@/server/auth/authorization";
 import { database } from "@/server/db/client";
-import { mediaAssets, mediaFolders } from "@/server/db/schema";
+import { editions, mediaAssets, mediaFolders } from "@/server/db/schema";
 
 function normalizeFolderName(value: FormDataEntryValue | null) {
   const name = String(value ?? "").trim().replace(/\s+/g, " ");
@@ -26,20 +26,28 @@ async function getFolder(id: string) {
   return folder;
 }
 
-export async function createMediaFolderAction(formData: FormData) {
+export async function createMediaFolderAction(formData: FormData): Promise<void> {
   const actor = await requirePermission("media.manage");
   const name = normalizeFolderName(formData.get("name"));
   const slug = toFolderSlug(name);
   const parentId = String(formData.get("parentId") ?? "").trim() || null;
+  const rawEditionId = String(formData.get("editionId") ?? "").trim() || null;
+
   if (parentId) await getFolder(parentId);
+  if (rawEditionId) {
+    const [edition] = await database.select().from(editions).where(eq(editions.id, rawEditionId)).limit(1);
+    if (!edition) throw new Error("Edisi tidak ditemukan");
+  }
+
   const [duplicate] = await database
     .select({ id: mediaFolders.id })
     .from(mediaFolders)
     .where(and(parentId ? eq(mediaFolders.parentId, parentId) : isNull(mediaFolders.parentId), eq(mediaFolders.slug, slug)))
     .limit(1);
   if (duplicate) throw new Error("Nama folder sudah digunakan pada lokasi ini");
+
   const id = crypto.randomUUID();
-  const after = { id, parentId, name, slug };
+  const after = { id, parentId, editionId: rawEditionId, name, slug };
 
   await database.transaction(async (tx) => {
     await tx.insert(mediaFolders).values({ ...after, ownerUserId: actor.session.user.id });
@@ -51,22 +59,28 @@ export async function createMediaFolderAction(formData: FormData) {
       resourceId: id,
       resourceLabel: name,
       after,
-      changedFields: ["parentId", "name", "slug"],
+      changedFields: ["parentId", "editionId", "name", "slug"],
       source: "admin-media",
     });
   });
   revalidatePath("/admin/media");
 }
 
-export async function renameMediaFolderAction(formData: FormData) {
+export async function renameMediaFolderAction(formData: FormData): Promise<void> {
   const actor = await requirePermission("media.manage");
   const folderId = String(formData.get("folderId") ?? "").trim();
   const folder = await getFolder(folderId);
   const name = normalizeFolderName(formData.get("name"));
   const slug = toFolderSlug(name);
+  const rawEditionId = formData.has("editionId") ? (String(formData.get("editionId") ?? "").trim() || null) : folder.editionId;
+
+  if (rawEditionId && rawEditionId !== folder.editionId) {
+    const [edition] = await database.select().from(editions).where(eq(editions.id, rawEditionId)).limit(1);
+    if (!edition) throw new Error("Edisi tidak ditemukan");
+  }
 
   await database.transaction(async (tx) => {
-    await tx.update(mediaFolders).set({ name, slug, updatedAt: new Date() }).where(eq(mediaFolders.id, folderId));
+    await tx.update(mediaFolders).set({ name, slug, editionId: rawEditionId, updatedAt: new Date() }).where(eq(mediaFolders.id, folderId));
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
       actorLabel: actor.session.user.email,
@@ -74,16 +88,58 @@ export async function renameMediaFolderAction(formData: FormData) {
       resourceType: "mediaFolder",
       resourceId: folderId,
       resourceLabel: name,
-      before: { name: folder.name, slug: folder.slug },
-      after: { name, slug },
-      changedFields: ["name", "slug"],
+      before: { name: folder.name, slug: folder.slug, editionId: folder.editionId },
+      after: { name, slug, editionId: rawEditionId },
+      changedFields: ["name", "slug", "editionId"],
       source: "admin-media",
     });
   });
   revalidatePath("/admin/media");
 }
 
-export async function moveMediaAssetAction(formData: FormData) {
+export async function updateMediaAssetMetadataAction(formData: FormData): Promise<void> {
+  const actor = await requirePermission("media.manage");
+  const assetId = String(formData.get("assetId") ?? "").trim();
+  if (!assetId) throw new Error("ID media wajib diisi");
+
+  const [asset] = await database.select().from(mediaAssets).where(eq(mediaAssets.id, assetId)).limit(1);
+  if (!asset) throw new Error("Media tidak ditemukan");
+
+  const rawAlt = formData.get("alt");
+  const rawDecorative = formData.get("decorative");
+  const decorative = rawDecorative === "true" || rawDecorative === "on" || rawDecorative === "1";
+  const alt = decorative ? null : (rawAlt !== null ? String(rawAlt).trim() || null : asset.alt);
+
+  const after = { alt, decorative };
+
+  await database.transaction(async (tx) => {
+    await tx.update(mediaAssets).set({
+      alt: after.alt,
+      decorative: after.decorative,
+      updatedAt: new Date(),
+    }).where(eq(mediaAssets.id, assetId));
+
+    await appendAuditLog(tx, {
+      actorUserId: actor.session.user.id,
+      actorLabel: actor.session.user.email,
+      action: "media.asset.metadata.update",
+      resourceType: "mediaAsset",
+      resourceId: asset.id,
+      resourceLabel: asset.filename,
+      before: { alt: asset.alt, decorative: asset.decorative },
+      after,
+      changedFields: ["alt", "decorative"],
+      source: "admin-media",
+      reason: "Pembaruan metadata alt dan dekoratif",
+    });
+  });
+
+  revalidatePath("/admin/media");
+  revalidatePath("/admin/content/site-assets");
+  revalidatePath("/admin/content/participants");
+}
+
+export async function moveMediaAssetAction(formData: FormData): Promise<void> {
   const actor = await requirePermission("media.manage");
   const assetId = String(formData.get("assetId") ?? "").trim();
   const folderId = String(formData.get("folderId") ?? "").trim() || null;
@@ -109,4 +165,72 @@ export async function moveMediaAssetAction(formData: FormData) {
     });
   });
   revalidatePath("/admin/media");
+}
+
+export async function getMediaAssetsAction(filters?: {
+  type?: "image" | "video" | "pdf" | "all";
+  folderId?: string | null | "all";
+  editionId?: string | null;
+  search?: string;
+  limit?: number;
+}) {
+  await requirePermission("media.view");
+
+  const conditions = [eq(mediaAssets.lifecycle, "ready")];
+
+  if (filters?.type && filters.type !== "all") {
+    if (filters.type === "image") {
+      conditions.push(like(mediaAssets.mimeType, "image/%"));
+    } else if (filters.type === "video") {
+      conditions.push(like(mediaAssets.mimeType, "video/%"));
+    } else if (filters.type === "pdf") {
+      conditions.push(eq(mediaAssets.mimeType, "application/pdf"));
+    }
+  }
+
+  if (filters?.folderId !== undefined && filters.folderId !== "all") {
+    if (filters.folderId === null) {
+      conditions.push(isNull(mediaAssets.folderId));
+    } else {
+      conditions.push(eq(mediaAssets.folderId, filters.folderId));
+    }
+  }
+
+  if (filters?.search) {
+    const query = `%${filters.search.trim()}%`;
+    conditions.push(or(like(mediaAssets.filename, query), like(mediaAssets.alt, query))!);
+  }
+
+  const queryLimit = filters?.limit && filters.limit > 0 && filters.limit <= 500 ? filters.limit : 300;
+
+  const [assets, folders, editionRows] = await Promise.all([
+    database
+      .select()
+      .from(mediaAssets)
+      .where(and(...conditions))
+      .orderBy(desc(mediaAssets.createdAt))
+      .limit(queryLimit),
+    database
+      .select()
+      .from(mediaFolders)
+      .orderBy(mediaFolders.name),
+    database
+      .select({ id: editions.id, year: editions.year, name: editions.name })
+      .from(editions)
+      .orderBy(desc(editions.year)),
+  ]);
+
+  return {
+    assets: assets.map((asset) => ({
+      ...asset,
+      createdAt: asset.createdAt.toISOString(),
+      updatedAt: asset.updatedAt ? asset.updatedAt.toISOString() : null,
+    })),
+    folders: folders.map((folder) => ({
+      ...folder,
+      createdAt: folder.createdAt.toISOString(),
+      updatedAt: folder.updatedAt ? folder.updatedAt.toISOString() : null,
+    })),
+    editions: editionRows,
+  };
 }
