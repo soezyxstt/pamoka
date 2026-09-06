@@ -1,4 +1,4 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 
 import { AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
@@ -25,8 +25,7 @@ export const metadata = { title: "Kepengurusan" };
 
 export default async function OrganizationPage() {
   const { effectivePermissions } = await requirePermission("content.view");
-  const canEdit = effectivePermissions.has("people.manage") || effectivePermissions.has("content.edit");
-  const canPublish = effectivePermissions.has("content.publish");
+  const canEdit = effectivePermissions.has("people.manage");
   const canManageMedia = effectivePermissions.has("media.manage");
 
   // 1. Fetch periods with counts
@@ -196,7 +195,7 @@ export default async function OrganizationPage() {
     <AdminPage
       eyebrow="Umum / organisasi"
       title="Kepengurusan"
-      description="Kelola periode kepengurusan global, visi misi, struktur unit berjenjang, dan direktori profil organisasi."
+      description="Kelola periode, struktur, dan profil organisasi."
     >
       <OrganizationWorkspace
         periods={periods}
@@ -204,7 +203,6 @@ export default async function OrganizationPage() {
         legacyAssignments={legacyAssignments}
         allUnits={allUnits}
         canEdit={canEdit}
-        canPublish={canPublish}
         canManageMedia={canManageMedia}
       />
     </AdminPage>

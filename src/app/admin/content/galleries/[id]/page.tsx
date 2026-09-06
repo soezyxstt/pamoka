@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 
 import { AdminPage } from "@/components/admin/primitives";
@@ -102,13 +102,18 @@ export default async function GalleryDetailPage(props: GalleryDetailPageProps) {
     .orderBy(asc(galleries.displayOrder));
 
   // Get item counts per sibling gallery
-  const siblingItemCounts = await database
-    .select({
-      galleryId: galleryItems.galleryId,
-      count: sql<number>`count(${galleryItems.id})`.mapWith(Number),
-    })
-    .from(galleryItems)
-    .groupBy(galleryItems.galleryId);
+  const siblingIds = siblingRows.map((gallery) => gallery.id);
+  const siblingItemCounts =
+    siblingIds.length === 0
+      ? []
+      : await database
+          .select({
+            galleryId: galleryItems.galleryId,
+            count: sql<number>`count(${galleryItems.id})`.mapWith(Number),
+          })
+          .from(galleryItems)
+          .where(inArray(galleryItems.galleryId, siblingIds))
+          .groupBy(galleryItems.galleryId);
 
   const siblingCountMap = new Map<string, number>();
   for (const row of siblingItemCounts) {
@@ -165,6 +170,7 @@ export default async function GalleryDetailPage(props: GalleryDetailPageProps) {
       description={`Kelola koleksi foto dan video untuk album "${galleryDetail.title}" pada ${currentEdition.name}.`}
     >
       <GalleryWorkspace
+        key={`${currentEdition.id}:${galleryDetail.id}:${galleryDetail.version}`}
         gallery={galleryDetail}
         initialItems={initialItems}
         siblingGalleries={siblingGalleries}

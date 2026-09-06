@@ -14,8 +14,13 @@ import {
   participantMedia,
   participantMediaRoles,
   participantSocialLinks,
+  participantStageEntries,
+  participantTitleAssignments,
   participants,
+  selectionStages,
   socialPlatforms,
+  voteDailyTallies,
+  votingCampaignParticipants,
   type ParticipantMediaRole,
   type SocialPlatform,
 } from "@/server/db/schema";
@@ -48,7 +53,7 @@ export type CreateParticipantInput = {
   name: string;
   slug?: string;
   number: number;
-  stage: string;
+  stage?: string;
   bio?: string | null;
   qrisMediaId?: string | null;
   paymentUrl?: string | null;
@@ -69,7 +74,7 @@ export async function createParticipantAction(data: FormData | CreateParticipant
   let name: string;
   let rawSlug: string;
   let number: number;
-  let stage: string;
+  let stage = "";
   let bio: string | null = null;
   let qrisMediaId: string | null = null;
   let paymentUrl: string | null = null;
@@ -82,7 +87,6 @@ export async function createParticipantAction(data: FormData | CreateParticipant
     name = String(data.get("name") ?? "").trim();
     rawSlug = String(data.get("slug") ?? "").trim();
     number = Number(data.get("number"));
-    stage = String(data.get("stage") ?? "semifinalis").trim();
     bio = String(data.get("bio") ?? "").trim() || null;
     qrisMediaId = String(data.get("qrisMediaId") ?? "").trim() || null;
     paymentUrl = String(data.get("paymentUrl") ?? "").trim() || null;
@@ -94,7 +98,6 @@ export async function createParticipantAction(data: FormData | CreateParticipant
     name = data.name?.trim() ?? "";
     rawSlug = data.slug?.trim() ?? "";
     number = Number(data.number);
-    stage = data.stage?.trim() ?? "semifinalis";
     bio = data.bio?.trim() || null;
     qrisMediaId = data.qrisMediaId?.trim() || null;
     paymentUrl = data.paymentUrl?.trim() || null;
@@ -111,11 +114,6 @@ export async function createParticipantAction(data: FormData | CreateParticipant
 
   if (!Number.isInteger(number) || number < 1) {
     throw new Error("Nomor peserta harus berupa bilangan bulat positif");
-  }
-
-  const validStages = ["audisi", "semifinal", "final", "semifinalis", "finalis"];
-  if (!validStages.includes(stage)) {
-    throw new Error("Tahap peserta tidak valid");
   }
 
   if (paymentUrl && !isValidUrl(paymentUrl)) {
@@ -137,6 +135,16 @@ export async function createParticipantAction(data: FormData | CreateParticipant
       throw new Error("Kategori harus berasal dari edisi yang aktif");
     }
 
+    const [firstStage] = await tx
+      .select()
+      .from(selectionStages)
+      .where(eq(selectionStages.editionId, editionId))
+      .orderBy(asc(selectionStages.displayOrder), asc(selectionStages.id))
+      .limit(1);
+    if (!firstStage) throw new Error("Buat tahap pertama sebelum menambah pendaftar");
+    if (firstStage.lifecycle === "closed") throw new Error("Tahap pertama sudah ditutup");
+    stage = firstStage.slug;
+
     // 2. Check slug uniqueness per (editionId, stage, slug)
     const [existingSlug] = await tx
       .select({ id: participants.id })
@@ -144,7 +152,6 @@ export async function createParticipantAction(data: FormData | CreateParticipant
       .where(
         and(
           eq(participants.editionId, editionId),
-          eq(participants.stage, stage),
           eq(participants.slug, slug)
         )
       )
@@ -186,6 +193,8 @@ export async function createParticipantAction(data: FormData | CreateParticipant
       editionId,
       categoryId,
       stage,
+      currentStageId: firstStage.id,
+      selectionStatus: "registered",
       number,
       name,
       slug,
@@ -195,6 +204,16 @@ export async function createParticipantAction(data: FormData | CreateParticipant
       paymentUrl,
       displayOrder: Number.isInteger(displayOrder) ? displayOrder : number,
       active,
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await tx.insert(participantStageEntries).values({
+      id: crypto.randomUUID(),
+      participantId: id,
+      stageId: firstStage.id,
+      decision: "pending",
       version: 1,
       createdAt: now,
       updatedAt: now,
@@ -228,6 +247,8 @@ export async function createParticipantAction(data: FormData | CreateParticipant
         editionId,
         categoryId,
         stage,
+        currentStageId: firstStage.id,
+        selectionStatus: "registered",
         number,
         name,
         slug,
@@ -243,6 +264,8 @@ export async function createParticipantAction(data: FormData | CreateParticipant
         "editionId",
         "categoryId",
         "stage",
+        "currentStageId",
+        "selectionStatus",
         "number",
         "name",
         "slug",
@@ -258,6 +281,7 @@ export async function createParticipantAction(data: FormData | CreateParticipant
   });
 
   revalidatePath("/admin/content/participants");
+  revalidatePath("/admin/content/participants/stages");
   return { success: true, id };
 }
 
@@ -267,12 +291,12 @@ export async function createParticipantAction(data: FormData | CreateParticipant
 
 export type UpdateParticipantInput = {
   participantId: string;
-  expectedVersion?: number;
+  expectedVersion: number;
   categoryId: string;
   name: string;
   slug?: string;
   number: number;
-  stage: string;
+  stage?: string;
   bio?: string | null;
   displayOrder?: number;
   active?: boolean;
@@ -281,9 +305,11 @@ export type UpdateParticipantInput = {
 
 export async function updateParticipantAction(data: FormData | UpdateParticipantInput) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
 
   let participantId: string;
-  let expectedVersion: number | undefined;
+  let expectedVersion: number;
   let categoryId: string;
   let name: string;
   let rawSlug: string;
@@ -297,24 +323,24 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
   if (data instanceof FormData) {
     participantId = String(data.get("participantId") ?? "").trim();
     const verRaw = data.get("expectedVersion");
-    expectedVersion = verRaw !== null && verRaw !== "" ? Number(verRaw) : undefined;
+    expectedVersion = verRaw !== null && verRaw !== "" ? Number(verRaw) : Number.NaN;
     categoryId = String(data.get("categoryId") ?? "").trim();
     name = String(data.get("name") ?? "").trim();
     rawSlug = String(data.get("slug") ?? "").trim();
     number = Number(data.get("number"));
-    stage = String(data.get("stage") ?? "semifinalis").trim();
+    stage = String(data.get("stage") ?? "").trim();
     bio = String(data.get("bio") ?? "").trim() || null;
     displayOrder = Number(data.get("displayOrder") ?? number);
     active = data.get("active") === null ? true : data.get("active") === "true" || data.get("active") === "1" || data.get("active") === "on";
     reason = String(data.get("reason") ?? "").trim() || undefined;
   } else {
     participantId = data.participantId?.trim() ?? "";
-    expectedVersion = data.expectedVersion;
+    expectedVersion = Number(data.expectedVersion);
     categoryId = data.categoryId?.trim() ?? "";
     name = data.name?.trim() ?? "";
     rawSlug = data.slug?.trim() ?? "";
     number = Number(data.number);
-    stage = data.stage?.trim() ?? "semifinalis";
+    stage = data.stage?.trim() ?? "";
     bio = data.bio?.trim() || null;
     displayOrder = Number(data.displayOrder ?? number);
     active = data.active ?? true;
@@ -332,11 +358,7 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
   if (!Number.isInteger(number) || number < 1) {
     throw new Error("Nomor peserta harus berupa bilangan bulat positif");
   }
-
-  const validStages = ["audisi", "semifinal", "final", "semifinalis", "finalis"];
-  if (!validStages.includes(stage)) {
-    throw new Error("Tahap peserta tidak valid");
-  }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new Error("Versi peserta tidak valid");
 
   const slug = slugify(rawSlug || name);
   const now = new Date();
@@ -347,7 +369,7 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
     const [before] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!before) {
@@ -355,9 +377,10 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
     }
 
     // 2. Version locking check
-    if (expectedVersion !== undefined && before.version !== expectedVersion) {
+    if (before.version !== expectedVersion) {
       throw new Error("Data peserta telah diubah oleh pengguna lain. Silakan muat ulang halaman.");
     }
+    stage = before.stage;
 
     // 3. Verify category belongs to participant's edition
     const [category] = await tx
@@ -377,7 +400,6 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
       .where(
         and(
           eq(participants.editionId, before.editionId),
-          eq(participants.stage, stage),
           eq(participants.slug, slug),
           ne(participants.id, participantId)
         )
@@ -391,7 +413,7 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
     nextVersion = before.version + 1;
 
     // 5. Update participant record
-    await tx
+    const updated = await tx
       .update(participants)
       .set({
         categoryId,
@@ -405,7 +427,9 @@ export async function updateParticipantAction(data: FormData | UpdateParticipant
         version: nextVersion,
         updatedAt: now,
       })
-      .where(eq(participants.id, participantId));
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (updated.length !== 1) throw new Error("Data peserta telah diubah oleh pengguna lain. Silakan muat ulang halaman.");
 
     // 6. Audit log
     await appendAuditLog(tx, {
@@ -462,9 +486,12 @@ export type ParticipantAchievementItem = {
 export async function saveParticipantAchievementsAction(
   participantId: string,
   achievements: ParticipantAchievementItem[],
+  expectedVersion: number,
   reason?: string
 ) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
 
   if (!participantId) {
     throw new Error("ID peserta wajib disertakan");
@@ -477,12 +504,13 @@ export async function saveParticipantAchievementsAction(
     const [participant] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!participant) {
       throw new Error("Peserta tidak ditemukan");
     }
+    if (!Number.isInteger(expectedVersion) || participant.version !== expectedVersion) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     const currentAchievements = await tx
       .select()
@@ -515,13 +543,15 @@ export async function saveParticipantAchievementsAction(
     }
 
     nextVersion = participant.version + 1;
-    await tx
+    const updated = await tx
       .update(participants)
       .set({
         version: nextVersion,
         updatedAt: now,
       })
-      .where(eq(participants.id, participantId));
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (updated.length !== 1) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -564,9 +594,12 @@ export type ParticipantSocialLinkItem = {
 export async function saveParticipantSocialLinksAction(
   participantId: string,
   links: ParticipantSocialLinkItem[],
+  expectedVersion: number,
   reason?: string
 ) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
 
   if (!participantId) {
     throw new Error("ID peserta wajib disertakan");
@@ -592,12 +625,13 @@ export async function saveParticipantSocialLinksAction(
     const [participant] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!participant) {
       throw new Error("Peserta tidak ditemukan");
     }
+    if (!Number.isInteger(expectedVersion) || participant.version !== expectedVersion) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     const currentLinks = await tx
       .select()
@@ -632,13 +666,15 @@ export async function saveParticipantSocialLinksAction(
     }
 
     nextVersion = participant.version + 1;
-    await tx
+    const updated = await tx
       .update(participants)
       .set({
         version: nextVersion,
         updatedAt: now,
       })
-      .where(eq(participants.id, participantId));
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (updated.length !== 1) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -682,9 +718,12 @@ export type ParticipantMediaItem = {
 export async function saveParticipantMediaAction(
   participantId: string,
   mediaItems: ParticipantMediaItem[],
+  expectedVersion: number,
   reason?: string
 ) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
 
   if (!participantId) {
     throw new Error("ID peserta wajib disertakan");
@@ -699,6 +738,9 @@ export async function saveParticipantMediaAction(
       throw new Error("Setiap item foto harus memiliki aset media yang valid");
     }
   }
+  if (mediaItems.filter((item) => item.role === "closeup" && item.active !== false).length > 1) {
+    throw new Error("Hanya satu foto closeup yang dapat dijadikan foto utama");
+  }
 
   const now = new Date();
   let nextVersion = 1;
@@ -708,12 +750,13 @@ export async function saveParticipantMediaAction(
     const [participant] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!participant) {
       throw new Error("Peserta tidak ditemukan");
     }
+    if (!Number.isInteger(expectedVersion) || participant.version !== expectedVersion) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     // Verify all media assets are ready images
     for (const item of mediaItems) {
@@ -767,14 +810,16 @@ export async function saveParticipantMediaAction(
     synchronizedCloseupMediaId = closeupItem ? closeupItem.mediaId : null;
 
     nextVersion = participant.version + 1;
-    await tx
+    const updated = await tx
       .update(participants)
       .set({
         portraitMediaId: synchronizedCloseupMediaId,
         version: nextVersion,
         updatedAt: now,
       })
-      .where(eq(participants.id, participantId));
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (updated.length !== 1) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -810,18 +855,18 @@ export async function saveParticipantMediaAction(
 
 export async function updateParticipantQrisAction(formData: FormData) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
   const participantId = String(formData.get("participantId") ?? "").trim();
   const qrisMediaId = String(formData.get("qrisMediaId") ?? "").trim() || null;
-  const paymentUrl = String(formData.get("paymentUrl") ?? "").trim() || null;
+  const expectedVersion = Number(formData.get("expectedVersion"));
   const reason = String(formData.get("reason") ?? "").trim();
 
   if (!participantId || !reason) {
     throw new Error("Peserta dan alasan perubahan QRIS wajib diisi");
   }
 
-  if (paymentUrl && !isValidUrl(paymentUrl)) {
-    throw new Error("URL pembayaran tidak valid");
-  }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new Error("Versi peserta tidak valid");
 
   const now = new Date();
   let nextVersion = 1;
@@ -830,10 +875,11 @@ export async function updateParticipantQrisAction(formData: FormData) {
     const [before] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!before) throw new Error("Peserta tidak ditemukan");
+    if (before.version !== expectedVersion) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     if (qrisMediaId) {
       const [qrisMedia] = await tx
@@ -848,9 +894,14 @@ export async function updateParticipantQrisAction(formData: FormData) {
     }
 
     nextVersion = before.version + 1;
-    const after = { qrisMediaId, paymentUrl, version: nextVersion, updatedAt: now };
+    const after = { qrisMediaId, version: nextVersion, updatedAt: now };
 
-    await tx.update(participants).set(after).where(eq(participants.id, participantId));
+    const updated = await tx
+      .update(participants)
+      .set(after)
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (updated.length !== 1) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -859,9 +910,9 @@ export async function updateParticipantQrisAction(formData: FormData) {
       resourceType: "participant",
       resourceId: participantId,
       resourceLabel: before.name,
-      before: { qrisMediaId: before.qrisMediaId, paymentUrl: before.paymentUrl, version: before.version },
-      after: { qrisMediaId, paymentUrl, version: nextVersion },
-      changedFields: ["qrisMediaId", "paymentUrl", "version"],
+      before: { qrisMediaId: before.qrisMediaId, version: before.version },
+      after: { qrisMediaId, version: nextVersion },
+      changedFields: ["qrisMediaId", "version"],
       source: "admin-content",
       reason,
     });
@@ -877,23 +928,29 @@ export async function updateParticipantQrisAction(formData: FormData) {
 // 7. TOGGLE PARTICIPANT ACTIVE STATUS
 // ---------------------------------------------------------------------------
 
-export async function toggleParticipantActiveAction(formData: FormData | { participantId: string; reason?: string }) {
+export async function toggleParticipantActiveAction(formData: FormData | { participantId: string; expectedVersion: number; reason?: string }) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
 
   let participantId: string;
+  let expectedVersion: number;
   let reason: string | undefined;
 
   if (formData instanceof FormData) {
     participantId = String(formData.get("participantId") ?? "").trim();
+    expectedVersion = Number(formData.get("expectedVersion"));
     reason = String(formData.get("reason") ?? "").trim() || undefined;
   } else {
     participantId = formData.participantId?.trim() ?? "";
+    expectedVersion = Number(formData.expectedVersion);
     reason = formData.reason?.trim() || undefined;
   }
 
   if (!participantId) {
     throw new Error("ID peserta wajib disertakan");
   }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new Error("Versi peserta tidak valid");
 
   const now = new Date();
   let nextActive = true;
@@ -903,22 +960,25 @@ export async function toggleParticipantActiveAction(formData: FormData | { parti
     const [before] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!before) throw new Error("Peserta tidak ditemukan");
+    if (before.version !== expectedVersion) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     nextActive = !before.active;
     nextVersion = before.version + 1;
 
-    await tx
+    const updated = await tx
       .update(participants)
       .set({
         active: nextActive,
         version: nextVersion,
         updatedAt: now,
       })
-      .where(eq(participants.id, participantId));
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (updated.length !== 1) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -945,38 +1005,56 @@ export async function toggleParticipantActiveAction(formData: FormData | { parti
 // 8. DELETE PARTICIPANT
 // ---------------------------------------------------------------------------
 
-export async function deleteParticipantAction(formData: FormData | { participantId: string; reason?: string }) {
+export async function deleteParticipantAction(formData: FormData | { participantId: string; expectedVersion: number; reason?: string }) {
   const actor = await requirePermission("participants.manage");
+  const editionContext = await getAdminEditionContext();
+  if (!editionContext) throw new Error("Pilih edisi aktif terlebih dahulu");
 
   let participantId: string;
+  let expectedVersion: number;
   let reason: string | undefined;
 
   if (formData instanceof FormData) {
     participantId = String(formData.get("participantId") ?? "").trim();
+    expectedVersion = Number(formData.get("expectedVersion"));
     reason = String(formData.get("reason") ?? "").trim() || undefined;
   } else {
     participantId = formData.participantId?.trim() ?? "";
+    expectedVersion = Number(formData.expectedVersion);
     reason = formData.reason?.trim() || undefined;
   }
 
   if (!participantId) {
     throw new Error("ID peserta wajib disertakan");
   }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new Error("Versi peserta tidak valid");
 
   await database.transaction(async (tx) => {
     const [before] = await tx
       .select()
       .from(participants)
-      .where(eq(participants.id, participantId))
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id)))
       .limit(1);
 
     if (!before) throw new Error("Peserta tidak ditemukan");
+    if (before.version !== expectedVersion) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
+
+    const entries = await tx.select().from(participantStageEntries).where(eq(participantStageEntries.participantId, participantId));
+    const [title] = await tx.select({ participantId: participantTitleAssignments.participantId }).from(participantTitleAssignments).where(eq(participantTitleAssignments.participantId, participantId)).limit(1);
+    const [snapshot] = await tx.select({ participantId: votingCampaignParticipants.participantId }).from(votingCampaignParticipants).where(eq(votingCampaignParticipants.participantId, participantId)).limit(1);
+    const [tally] = await tx.select({ id: voteDailyTallies.id }).from(voteDailyTallies).where(eq(voteDailyTallies.participantId, participantId)).limit(1);
+    const isUnusedApplicant = entries.length === 1 && entries[0].decision === "pending" && entries[0].stageId === before.currentStageId;
+    if (!isUnusedApplicant || title || snapshot || tally) throw new Error("Peserta yang sudah diproses tidak dapat dihapus. Nonaktifkan peserta atau gunakan rollback.");
 
     // Cascading deletes on participantAchievements, participantSocialLinks, participantMedia are handled by foreign key or explicit delete
     await tx.delete(participantAchievements).where(eq(participantAchievements.participantId, participantId));
     await tx.delete(participantSocialLinks).where(eq(participantSocialLinks.participantId, participantId));
     await tx.delete(participantMedia).where(eq(participantMedia.participantId, participantId));
-    await tx.delete(participants).where(eq(participants.id, participantId));
+    const deleted = await tx
+      .delete(participants)
+      .where(and(eq(participants.id, participantId), eq(participants.editionId, editionContext.id), eq(participants.version, expectedVersion)))
+      .returning({ id: participants.id });
+    if (deleted.length !== 1) throw new Error("Data peserta telah diubah. Muat ulang halaman.");
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,

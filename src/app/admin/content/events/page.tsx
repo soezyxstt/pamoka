@@ -1,12 +1,11 @@
-import { asc, eq, sql } from "drizzle-orm";
-import { notFound, redirect } from "next/navigation";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
 import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
 import { events, galleries, mediaAssets } from "@/server/db/schema";
-import { EventsClient, type EventItem } from "./events-client";
+import { EventsDirectory, type EventDirectoryItem } from "./events-directory";
 
 export const metadata = { title: "Acara" };
 
@@ -38,6 +37,7 @@ export default async function EventsPage() {
       heroMediaId: events.heroMediaId,
       displayOrder: events.displayOrder,
       active: events.active,
+      version: events.version,
       heroMedia: {
         id: mediaAssets.id,
         url: mediaAssets.url,
@@ -62,7 +62,7 @@ export default async function EventsPage() {
       count: sql<number>`count(${galleries.id})`.mapWith(Number),
     })
     .from(galleries)
-    .where(eq(galleries.ownerType, "event"))
+    .where(and(eq(galleries.editionId, currentEdition.id), eq(galleries.ownerType, "event")))
     .groupBy(galleries.ownerId);
 
   const galleryCountMap = new Map<string, number>();
@@ -72,15 +72,15 @@ export default async function EventsPage() {
     }
   }
 
-  const initialEvents: EventItem[] = rawEvents.map((ev) => ({
+  const initialEvents: EventDirectoryItem[] = rawEvents.map((ev) => ({
     id: ev.id,
     label: ev.label,
     slug: ev.slug,
     description: ev.description,
-    heroMediaId: ev.heroMediaId,
     heroMedia: ev.heroMedia?.id ? ev.heroMedia : null,
     displayOrder: ev.displayOrder,
     active: Boolean(ev.active),
+    version: ev.version,
     galleryCount: galleryCountMap.get(ev.id) ?? 0,
   }));
 
@@ -89,13 +89,12 @@ export default async function EventsPage() {
   return (
     <AdminPage
       eyebrow="Studio / events"
-      title="Acara & Rangkaian Kegiatan"
-      description={`Kelola jadwal dan rangkaian kegiatan untuk ${currentEdition.name} (${currentEdition.year}).`}
+      title="Rangkaian acara"
+      description="Kelola acara dan album dokumentasi edisi aktif."
     >
-      <EventsClient
+      <EventsDirectory
+        key={`${currentEdition.id}:${initialEvents.map((event) => `${event.id}:${event.version}`).join(",")}`}
         initialEvents={initialEvents}
-        editionName={currentEdition.name}
-        editionId={currentEdition.id}
         canEdit={canEdit}
       />
     </AdminPage>

@@ -132,6 +132,13 @@ Media tetap global dan reusable. Tambahkan `mediaFolder.editionId` nullable agar
 - `committeeAssignments`: editionId, unitId, personId, title, displayOrder, active, version.
 - `participantSocialLinks`: participantId, platform, label nullable, url, displayOrder.
 - `participantMedia`: participantId, role, mediaId, caption, displayOrder, active.
+- `selectionStages`: editionId, name, slug, displayOrder, targetParticipantCount, lifecycle, finalStage, version. Urutan stage membentuk satu alur linear per edisi.
+- `participantStageEntries`: participantId, stageId, decision, decidedAt, decidedByUserId, reason nullable, version. Decision hanya `pending`, `advanced`, atau `eliminated`.
+- `editionTitles`: editionId, name, description nullable, capacity, displayOrder, active, version.
+- `participantTitleAssignments`: editionTitleId, participantId, assignedAt, assignedByUserId. Satu peserta dapat memiliki beberapa gelar, tetapi satu gelar yang sama tidak boleh diberikan dua kali kepada peserta yang sama.
+- `votingCampaignParticipants`: campaignId, participantId, sourceStageId, addedAt. Tabel ini adalah snapshot daftar peserta saat kampanye dimulai; kesiapan QRIS tetap membaca binding QRIS peserta terbaru.
+- `participants`: tambah `currentStageId`, `selectionStatus`, dan pertahankan `stage` lama sebagai compatibility field read-only sampai public cutover.
+- `votingCampaigns`: tambah `eligibilityStageId`, `startedAt`, `closedAt`, dan versioned lifecycle manual. Tanggal rencana tetap boleh disimpan sebagai informasi, tetapi tidak memulai atau menutup kampanye otomatis.
 - `newsArticles`: tambah `bodyJson`; pertahankan `body` lama sebagai compatibility field sampai public cutover.
 - `galleries`: tambah slug, description, coverMediaId, displayOrder, status, active; owner dapat berupa `standalone` atau `event`.
 - `galleryItems`: pertahankan gambar atau YouTube, caption, displayOrder, active, serta validasi tepat satu sumber.
@@ -148,6 +155,27 @@ Role media peserta:
 - `other`
 
 Record `portraitMediaId` lama tidak langsung dihapus. Data tersebut dibackfill menjadi `participantMedia.role=closeup`, lalu kolom lama tetap dipertahankan read-only sampai public plan selesai.
+
+Kolom `participants.stage` lama dipetakan ke stage buatan per edisi saat migration lokal. Nilai unik yang ada menjadi stage berurutan untuk ditinjau admin. Kolom `paymentUrl` tidak digunakan pada alur baru dan dipertahankan read-only sampai public cutover agar data lama tidak hilang.
+
+### Model alur Pasanggiri
+
+- Pendaftaran dilakukan di Google Form di luar sistem. Admin memasukkan pendaftar secara manual; import spreadsheet dan public registration form tidak termasuk plan ini.
+- Satu peserta tetap memakai record yang sama sejak pendaftaran sampai penyematan gelar.
+- Admin membuat stage sebanyak kebutuhan edisi. Stage selalu linear dan urutannya eksplisit.
+- Stage pertama menerima seluruh pendaftar baru. Stage berikutnya hanya menerima peserta yang diputuskan `advanced` dari stage sebelumnya.
+- Satu peserta hanya memiliki satu entry pada satu stage. Entry, stage, peserta, gelar, dan kampanye yang dihubungkan wajib berasal dari edisi yang sama.
+- `targetParticipantCount` berlaku sebagai satu batas total stage, tidak dibagi per kategori `JD`, `MD`, `JR`, atau `MR`.
+- Sistem tidak menyimpan nilai tes, kriteria, ranking, atau lembar penilaian. Sistem hanya menyimpan keputusan lolos atau tidak lolos.
+- Stage tidak dapat dihapus atau dipindah setelah memiliki entry peserta. Koreksi dilakukan melalui rollback yang diaudit.
+- Rollback keputusan hanya diizinkan jika peserta belum memiliki keputusan pada stage berikutnya, belum masuk snapshot voting aktif, dan belum menerima gelar.
+- Tepat satu stage per edisi dapat ditandai sebagai tahap final. Penandaan ini dapat diubah selama belum dipakai oleh gelar atau kampanye voting.
+- Setiap peserta pada tahap final harus menerima minimal satu gelar sebelum kesiapan penyematan dinyatakan lengkap. Peserta dapat menerima beberapa gelar.
+- Gelar tidak dibatasi kategori. Capacity adalah jumlah maksimum penerima gelar tersebut untuk seluruh kategori.
+- QRIS dibuat di luar website. Admin hanya mengunggah atau memilih gambar ready dari UploadThing melalui media picker. Website tidak menyediakan generator QRIS atau field tautan pembayaran baru.
+- Kampanye voting dibuat per edisi, memilih satu stage sebagai sumber eligibility, lalu dimulai dan ditutup manual.
+- Saat kampanye dimulai, sistem membuat snapshot peserta aktif dari stage sumber. Perubahan stage setelah itu tidak mengubah daftar peserta voting kampanye tersebut.
+- Kampanye tidak dapat dimulai tanpa peserta. Peserta tanpa QRIS tetap masuk snapshot, tetapi ditandai belum siap dan tidak dapat menerima tally sampai gambar QRIS dipasang.
 
 Skema legacy `pageSections` dan `organizationAssignments` juga tidak dihapus pada plan admin. Data lama harus muncul sebagai `Perlu dipetakan` sampai admin memilih period, unit, atau slot yang sesuai.
 
@@ -352,37 +380,97 @@ Acceptance:
 - Cross-edition unit atau assignment ditolak server.
 - Semua perubahan diaudit.
 
-### Checkpoint 8: Mojang Jajaka
+### Checkpoint 8A: Fondasi alur seleksi dinamis
+
+- Tambahkan tabel stage, entry stage, gelar, assignment gelar, dan snapshot peserta voting.
+- Tambahkan current stage dan selection status pada peserta tanpa menghapus compatibility field lama.
+- Backfill nilai `participants.stage` menjadi stage per edisi dan tandai hasilnya `Perlu ditinjau`.
+- Pertahankan `qrisMediaId` sebagai binding gambar. Hentikan penggunaan `paymentUrl` pada UI baru tanpa menghapus kolom lama.
+- Semua foreign key harus memverifikasi satu edisi yang sama pada service/action layer.
+- Tahap tidak dapat dihapus selama masih menjadi current stage peserta atau eligibility stage kampanye. Admin harus melepas keterkaitan tersebut terlebih dahulu.
+- Backfill bersifat idempotent, mempertahankan `participants.stage` dan `paymentUrl`, serta menandai entry hasil migrasi sebagai `pending` dengan catatan `Perlu ditinjau`.
+
+Acceptance:
+
+- Jumlah dan nama stage tidak hardcoded.
+- Stage tersusun linear dan tidak dapat memiliki cabang.
+- Migration lokal dapat dijalankan ulang pada database uji tanpa menggandakan stage atau entry.
+- Data stage, QRIS, dan payment URL lama tidak hilang.
+- Tidak ada perubahan public reader atau public route.
+
+### Checkpoint 8B: Pendaftar dan pengaturan tahap
+
+Status: **SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN**.
+
+Status: **SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN**.
+
+Halaman dan route:
+
+- `/admin/content/participants`: daftar seluruh pendaftar dan peserta edisi aktif.
+- `/admin/content/participants/new`: input pendaftar manual dari hasil Google Form.
+- `/admin/content/participants/stages`: daftar stage linear, target peserta, status, dan urutan.
+- `/admin/content/participants/stages/[id]`: workspace keputusan satu stage.
+
+Form pendaftar manual minimal berisi nama, nomor pendaftaran, kategori, slug, dan bio opsional. Pendaftar baru otomatis masuk stage pertama sebagai `pending`; tidak ada field stage bebas. Pembuatan peserta diblokir bila stage pertama belum tersedia.
+
+Pengaturan stage mendukung tambah, ubah nama, target jumlah peserta, urutkan, tandai tahap final, buka, dan tutup. Stage yang sudah dipakai tidak dapat dihapus atau dipindahkan.
+
+Workspace seleksi menampilkan pencarian, filter kategori, jumlah pending, jumlah dipilih, target total, dan daftar peserta. Admin dapat memilih peserta satu per satu atau banyak sekaligus, kemudian menetapkan `Lolos` atau `Tidak lolos` dengan konfirmasi. Menutup stage membuat entry `pending` pada stage berikutnya untuk seluruh peserta yang lolos.
+
+Acceptance:
+
+- Input peserta hanya manual dan selalu masuk stage pertama.
+- Keputusan massal tidak dapat melampaui target peserta stage berikutnya.
+- Admin boleh menutup dengan jumlah lebih sedikit setelah konfirmasi dan alasan.
+- Peserta yang tidak lolos tidak muncul pada stage berikutnya.
+- Semua keputusan, rollback, buka, tutup, dan perubahan target memakai permission, optimistic version, transaksi, serta audit.
+- Tidak ada perhitungan nilai atau ranking.
+
+Verifikasi source: typecheck, lint delapan file route, scan aturan desain, dan 11 focused tests peserta serta seleksi lulus. Runtime visual belum diverifikasi dengan sesi admin terautentikasi. Migrasi dan backfill CP8A belum diterapkan ke database operator.
+
+### Checkpoint 8C: Profil peserta, media, QRIS, dan gelar
+
+Status: **SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN**.
 
 Halaman list `/admin/content/participants`:
 
 - Search nama atau nomor.
-- Filter kategori, tahap, status, kelengkapan foto, dan QRIS.
+- Filter kategori, stage dinamis, keputusan, kelengkapan foto, gelar, dan QRIS.
 - Thumbnail closeup.
 - Badge kelengkapan profil.
 - Tombol tambah pada header.
 
 Halaman `/admin/content/participants/[id]` memiliki bagian:
 
-- Identitas: nama, slug, nomor, kategori, tahap, bio.
+- Identitas: nama, slug, nomor, kategori, current stage read-only, dan bio.
 - Prestasi: tambah, edit, hapus, urutkan.
 - Sosial media opsional.
 - Media: closeup, full body, detail, karantina, lainnya.
-- QRIS dan URL pembayaran.
+- QRIS berupa gambar upload atau binding dari pustaka media.
 - Preview profil.
 - Status aktif/nonaktif.
 
 Media karantina dan lainnya dapat berisi beberapa aset. Closeup hanya satu primary item.
+
+Halaman `/admin/content/participants/titles` berisi daftar gelar edisi, capacity, jumlah terisi, status, dan urutan. Form gelar memakai Sheet. Workspace penyematan menampilkan peserta tahap final dan mendukung beberapa gelar per peserta dengan indikator capacity real time.
 
 Acceptance:
 
 - Kategori yang dapat dipilih hanya kategori edisi aktif.
 - Setiap media divalidasi sebagai gambar ready.
 - Existing `portraitMediaId` tampil sebagai closeup setelah backfill.
-- Binding atau penggantian QRIS tetap terhubung ke voting.
+- Binding atau penggantian QRIS memakai gambar ready dan tidak membuat QRIS di website.
+- Satu peserta tahap final dapat menerima beberapa gelar.
+- Gelar tidak memiliki pembatas kategori dan jumlah assignment tidak dapat melampaui capacity.
+- Gelar hanya dapat diberikan kepada peserta yang berada pada stage yang ditandai final.
+- Kesiapan penyematan belum lengkap selama ada peserta tahap final tanpa gelar.
 - Semua mutation memakai optimistic version dan audit.
 
+Verifikasi source: typecheck, lint file perubahan, scan aturan desain, dan 14 focused tests peserta, seleksi, serta gelar lulus. Runtime visual belum diverifikasi dengan sesi admin terautentikasi. Migrasi dan backfill CP8A belum diterapkan ke database operator.
+
 ### Checkpoint 9: Acara dan dedicated gallery workspace
+
+Status: SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN.
 
 Halaman acara:
 
@@ -418,11 +506,22 @@ Acceptance:
 - Tidak ada gallery duplikat akibat menambah item.
 - Preview desktop dan 380 px dapat digunakan tanpa overflow.
 
+Implementasi source menyediakan direktori acara per edisi, halaman buat dan detail acara, relasi album tanpa editor tertanam, direktori album, form album yang dapat dipraisi dari acara, serta workspace item foto dan YouTube. Semua mutation memakai permission server, transaksi dan audit, isolasi edisi aktif, serta optimistic version. Perubahan item diserialisasi per album agar caption, urutan, dan hapus tidak saling menimpa. Constraint `gallery_item_exactly_one_source` memastikan setiap item memiliki tepat satu sumber.
+
+Verifikasi source: `db:check`, typecheck, lint file CP9 tanpa error, dan 6 focused tests acara, galeri, sumber item, YouTube, serta reorder lulus. Review kritis ditindaklanjuti untuk duplicate reorder, state lintas edisi, mode hanya-baca, konflik mutation, kelengkapan audit, dan race relasi acara-album. Migrasi `0014_burly_sprite.sql` belum diterapkan ke database operator. Runtime visual desktop dan 380 px belum diverifikasi dengan sesi admin terautentikasi.
+
 ### Checkpoint 10: Voting dan dashboard edition-scoped
 
+Status: SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN.
+
 - Hapus selector edisi dari form pembuatan kampanye.
-- Filter campaign, peserta, ranking, QRIS readiness, dan tally berdasarkan context.
-- Pertahankan validasi tanggal WIB, harga per vote, finalis aktif, kategori, optimistic tally version, dan reason.
+- Kampanye memilih satu stage edisi aktif sebagai sumber peserta. Default UI adalah stage yang ditandai final, tetapi server tidak bergantung pada nama stage.
+- Tambahkan action `Mulai voting` dan `Tutup voting` yang eksplisit, memakai konfirmasi, reason, version, transaksi, dan audit.
+- Saat mulai, buat snapshot `votingCampaignParticipants`. Snapshot tidak berubah karena promosi, eliminasi, atau rename stage setelah kampanye berjalan.
+- Filter campaign, peserta snapshot, QRIS readiness, ranking, dan tally berdasarkan context.
+- Pertahankan validasi WIB, harga per vote, kategori, optimistic tally version, dan reason.
+- Tally hanya menerima participant yang ada pada snapshot kampanye dan sudah memiliki gambar QRIS.
+- Hapus asumsi eligibility `participant.stage === "finalis"` dari helper dan action voting.
 - Dashboard menampilkan readiness per modul untuk edisi aktif: identitas, program, aset wajib, berita, sponsor, peserta, acara, galeri, panitia, dan voting.
 - Tambahkan tautan langsung dari setiap readiness item ke editor terkait.
 - Kepengurusan ditampilkan sebagai informasi periode terkait, bukan statistik edition-scoped yang dapat diedit dari dashboard.
@@ -431,10 +530,19 @@ Acceptance:
 
 - Tidak ada data voting silang edisi di response server maupun UI.
 - Kampanye baru otomatis memakai edisi context.
+- Kampanye draft dapat memilih stage, kampanye aktif tidak dapat mengganti stage atau peserta snapshot.
+- Kampanye hanya berubah ke aktif atau ditutup melalui action manual, bukan otomatis karena jam server.
+- QRIS hanya diunggah atau dibind sebagai gambar; website tidak menghasilkan QRIS.
 - Dashboard tidak menghitung record edisi lain.
 - Perubahan selector memperbarui dashboard dan voting secara konsisten.
 
+Implementasi sumber memakai kampanye per edisi dengan tahap sumber dinamis, lifecycle manual, snapshot peserta saat mulai, validasi gambar QRIS siap pakai, tally berbasis snapshot, serta visibilitas hasil yang diaudit. Dashboard memakai 10 indikator kesiapan edisi dan menampilkan periode kepengurusan sebagai informasi global.
+
+Verifikasi sumber: 5 focused tests voting lulus, termasuk snapshot immutable, stale version, QRIS kosong atau PDF, tanggal lokal tidak sah, tally setelah tutup, dan isolasi edisi. Typecheck serta lint file CP10 lulus. Runtime visual desktop, true FormData, dataset browser nonempty, dan viewport 380 px belum diverifikasi dengan sesi admin terautentikasi.
+
 ### Checkpoint 11: Cleanup, dokumentasi, dan final verification
+
+Status: SOURCE ACCEPTED, RUNTIME QA OPEN.
 
 - Jadikan `/admin/content/pages` redirect ke asset editor.
 - Jadikan `/admin/content/people` redirect ke kepengurusan.
@@ -456,6 +564,10 @@ Final verification:
 - Permission matrix untuk viewer, content editor, publisher, media manager, voting operator, dan super admin.
 - Konfirmasi public site masih memakai sumber lama dan tidak berubah.
 
+Implementasi sumber mempertahankan redirect kompatibilitas untuk Pages dan People, mengganti kartu overview Konten dengan daftar ringkas, serta menghapus lima komponen atau action legacy tanpa caller. Runbook cutover kini mencakup pemilihan edisi dan pemetaan data lama tanpa menghapus field kompatibilitas.
+
+Verifikasi akhir sumber: `db:check`, 72 tests, typecheck, lint tanpa error baru, production build 36 halaman, scan aturan copy admin dan file perubahan, serta `git diff --check` lulus. Public route tidak diubah. Browser QA terautentikasi, viewport 380 px, keyboard QA lengkap, true FormData, upload nyata, dan permission matrix runtime masih terbuka.
+
 ## Acceptance lintas sistem
 
 Plan admin dinyatakan selesai hanya jika:
@@ -470,6 +582,9 @@ Plan admin dinyatakan selesai hanya jika:
 - Kepengurusan memiliki periode dan unit bertingkat.
 - Panitia terpisah per edisi tetapi memakai direktori profil yang sama.
 - Peserta memiliki sosial media dan beberapa peran foto.
+- Tahap seleksi dibuat admin, linear, dan keputusan lolos tercatat per peserta.
+- Gelar dibuat per edisi dengan capacity dan mendukung beberapa gelar untuk satu peserta.
+- Voting memakai snapshot stage dan lifecycle mulai atau tutup manual.
 - Sponsor memiliki logo, tier, website, urutan, dan status.
 - Galeri memiliki dedicated authoring workspace.
 - Public routes, import aset hardcoded, dan production cutover tetap belum dilakukan.
@@ -483,3 +598,6 @@ Plan admin dinyatakan selesai hanya jika:
 - Editor berita menggunakan WYSIWYG TipTap dengan JSON terstruktur dan live preview.
 - Brand chrome seperti logo navbar, footer, dan texture tidak editable; seluruh foto, video, cover, hero, event, peserta, berita, sponsor, dan galeri editable melalui slot atau entity media.
 - Tidak ada migration remote, upload massal, deployment, atau public cutover dalam plan ini.
+- Pendaftaran tetap dilakukan melalui Google Form; CMS hanya menerima input admin manual.
+- Kuota stage adalah total lintas kategori.
+- Sistem seleksi hanya menyimpan keputusan lolos atau tidak lolos, bukan nilai atau ranking.

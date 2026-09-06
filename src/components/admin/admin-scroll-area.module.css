@@ -1,0 +1,108 @@
+.root {
+  min-height: 0;
+}
+
+.root :global([data-slot="scroll-area-viewport"]) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.root :global([data-slot="scroll-area-viewport"]::-webkit-scrollbar) {
+  width: 0;
+  height: 0;
+}
+
+.root :global([data-slot="scroll-area-scrollbar"]) {
+  width: 0.375rem;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+}
+
+.root :global([data-slot="scroll-area-scrollbar"][data-orientation="horizontal"]) {
+  width: auto;
+  height: 0.375rem;
+}
+
+.root :global([data-slot="scroll-area-thumb"]) {
+  border-radius: 9999px;
+  background-color: var(--color-dgb-400);
+  opacity: 0.42;
+  transition: opacity 150ms ease, background-color 150ms ease;
+}
+
+.root :global([data-slot="scroll-area-thumb"]:hover),
+.root :global([data-slot="scroll-area-scrollbar"]:focus-visible [data-slot="scroll-area-thumb"]) {
+  background-color: var(--color-dgb-300);
+  opacity: 0.78;
+}
+
+.root:focus-within :global([data-slot="scroll-area-thumb"]) {
+  background-color: var(--color-dgb-300);
+  opacity: 0.7;
+}
+
+.root :global([data-slot="scroll-area-scrollbar"]:focus-visible) {
+  border-radius: 9999px;
+  outline: 2px solid var(--color-fb-300);
+  outline-offset: 2px;
+}
+
+.root[data-surface="dark"] :global([data-slot="scroll-area-thumb"]) {
+  background-color: rgb(255 255 255 / 0.62);
+  opacity: 0.46;
+}
+
+.root[data-surface="dark"] :global([data-slot="scroll-area-thumb"]:hover),
+.root[data-surface="dark"] :global([data-slot="scroll-area-scrollbar"]:focus-visible [data-slot="scroll-area-thumb"]) {
+  background-color: rgb(255 255 255 / 0.9);
+  opacity: 0.84;
+}
+
+.root[data-surface="dark"]:focus-within :global([data-slot="scroll-area-thumb"]) {
+  background-color: rgb(255 255 255 / 0.86);
+  opacity: 0.78;
+}
+
+.native {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-dgb-400) 42%, transparent) transparent;
+}
+
+.native::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.native::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.native::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background-color: var(--color-dgb-400);
+  opacity: 0.42;
+  transition: background-color 150ms ease, opacity 150ms ease;
+}
+
+.native::-webkit-scrollbar-thumb:hover,
+.native:focus-within::-webkit-scrollbar-thumb,
+.native:focus-visible::-webkit-scrollbar-thumb {
+  background-color: var(--color-dgb-300);
+  opacity: 0.78;
+}
+
+.native:focus-within,
+.native:focus-visible {
+  scrollbar-color: color-mix(in srgb, var(--color-dgb-400) 78%, transparent) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root :global([data-slot="scroll-area-thumb"]) {
+    transition: none;
+  }
+
+  .native::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+}

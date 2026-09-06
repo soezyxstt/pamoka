@@ -10,7 +10,7 @@ import {
   AdminMediaField,
   type MediaAssetSummary,
 } from "@/components/admin/media-picker";
-import { AdminCard } from "@/components/admin/primitives";
+import { AdminCard, AdminSelect } from "@/components/admin/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,18 +30,27 @@ export function NewGalleryForm({
   editionName,
   editionId,
   eventsList,
+  initialEventId,
 }: {
   editionName: string;
   editionId: string;
   eventsList: { id: string; label: string }[];
+  initialEventId?: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [isSlugCustomized, setIsSlugCustomized] = useState(false);
   const [description, setDescription] = useState("");
-  const [ownerType, setOwnerType] = useState<"standalone" | "event">("standalone");
-  const [ownerId, setOwnerId] = useState<string>(eventsList[0]?.id ?? "");
+  const validInitialEventId = eventsList.some((event) => event.id === initialEventId)
+    ? initialEventId
+    : undefined;
+  const [ownerType, setOwnerType] = useState<"standalone" | "event">(
+    validInitialEventId ? "event" : "standalone",
+  );
+  const [ownerId, setOwnerId] = useState<string>(
+    validInitialEventId ?? eventsList[0]?.id ?? "",
+  );
   const [coverMediaId, setCoverMediaId] = useState<string | null>(null);
   const [coverAsset, setCoverAsset] = useState<MediaAssetSummary | null>(null);
   const [status, setStatus] = useState<"draft" | "published">("published");
@@ -95,7 +104,7 @@ export function NewGalleryForm({
 
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
-      <AdminCard className="p-6 space-y-4">
+      <AdminCard className="space-y-4 p-6 sm:p-6">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <Link
             href="/admin/content/galleries"
@@ -144,45 +153,45 @@ export function NewGalleryForm({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Tipe Album</label>
-            <select
+            <AdminSelect
+              aria-label="Tipe album"
               value={ownerType}
-              onChange={(e) => setOwnerType(e.target.value as "standalone" | "event")}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
-            >
-              <option value="standalone">Standalone (Umum)</option>
-              <option value="event">Terkait Rangkaian Acara</option>
-            </select>
+              onValueChange={(value) => setOwnerType(value as "standalone" | "event")}
+              className="h-9 w-full text-xs"
+              options={[
+                { value: "standalone", label: "Umum" },
+                { value: "event", label: "Terkait acara" },
+              ]}
+            />
           </div>
 
           {ownerType === "event" && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Pilih Acara *</label>
-              <select
+              <AdminSelect
+                aria-label="Pilih acara"
                 value={ownerId}
-                onChange={(e) => setOwnerId(e.target.value)}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
+                onValueChange={setOwnerId}
                 required
-              >
-                {eventsList.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.label}
-                  </option>
-                ))}
-              </select>
+                className="h-9 w-full text-xs"
+                options={eventsList.map((ev) => ({ value: ev.id, label: ev.label }))}
+              />
             </div>
           )}
 
           {ownerType === "standalone" && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Status Publikasi</label>
-              <select
+              <AdminSelect
+                aria-label="Status publikasi album"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as "published" | "draft")}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
-              >
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
-              </select>
+                onValueChange={(value) => setStatus(value as "published" | "draft")}
+                className="h-9 w-full text-xs"
+                options={[
+                  { value: "published", label: "Terbit" },
+                  { value: "draft", label: "Draf" },
+                ]}
+              />
             </div>
           )}
         </div>
@@ -215,7 +224,7 @@ export function NewGalleryForm({
             className="bg-dgb hover:bg-dgb/90 text-white text-xs"
           >
             <Save size={14} className="mr-1.5" />
-            {isSubmitting ? "Menyimpan..." : "Buat Album & Lanjutkan ke Item"}
+            {isSubmitting ? "Menyimpan..." : "Buat album"}
           </Button>
         </div>
       </AdminCard>

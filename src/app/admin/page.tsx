@@ -1,20 +1,9 @@
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import {
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
-  Clock,
-  ExternalLink,
-  Flame,
-  Globe,
-  ImageIcon,
-  LayoutGrid,
-  Newspaper,
-  ShieldAlert,
-  Sparkles,
-  Trophy,
-  Users,
-  Vote,
+  ClipboardList,
   XCircle,
 } from "lucide-react";
 import { headers } from "next/headers";
@@ -23,7 +12,6 @@ import { redirect } from "next/navigation";
 
 import { AdminIcon, type AdminIconName } from "@/components/admin/icons";
 import {
-  AdminBadge,
   AdminCard,
   AdminCardHeader,
   AdminLinkButton,
@@ -33,7 +21,6 @@ import {
 } from "@/components/admin/primitives";
 import { getAdminEditionContext } from "@/server/cms/context";
 import { SITE_ASSET_SLOTS } from "@/server/cms/site-asset-manifest";
-import { appendAuditLog } from "@/server/auth/audit";
 import {
   ensurePendingAdminProfile,
   getEffectivePermissions,
@@ -42,14 +29,14 @@ import type { PermissionKey } from "@/server/auth/permissions";
 import { auth } from "@/server/auth/config";
 import { database } from "@/server/db/client";
 import {
-  accessRequests,
   auditLogs,
   committeeAssignments,
+  editionPrograms,
   editions,
   events,
   galleries,
-  mediaAssets,
   newsArticles,
+  organizationPeriods,
   participants,
   siteAssetBindings,
   sponsors,
@@ -75,8 +62,8 @@ const quickActions: Array<{
   {
     href: "/admin/content/edition-settings",
     label: "Identitas Edisi",
-    description: "Logo, slogan, dan program unggulan edisi aktif",
-    icon: "sparkles",
+    description: "Logo, slogan, dan program unggulan",
+    icon: "award",
     permission: "content.view",
   },
   {
@@ -134,14 +121,13 @@ export default async function AdminDashboard() {
 
   const [
     participantCountRows,
-    finalistCountRows,
+    activeParticipantCountRows,
+    programCountRows,
     newsCountRows,
     sponsorCountRows,
     eventCountRows,
     votingCountRows,
     galleryCountRows,
-    mediaCountRows,
-    pendingCountRows,
     siteAssetBindingRows,
     committeeCountRows,
     editionDetailRows,
@@ -157,11 +143,16 @@ export default async function AdminDashboard() {
       ? database
           .select({ value: count() })
           .from(participants)
+          .where(and(eq(participants.editionId, currentEdition.id), eq(participants.active, true)))
+      : Promise.resolve([{ value: 0 }]),
+    currentEdition
+      ? database
+          .select({ value: count() })
+          .from(editionPrograms)
           .where(
             and(
-              eq(participants.editionId, currentEdition.id),
-              eq(participants.stage, "finalis"),
-              eq(participants.active, true),
+              eq(editionPrograms.editionId, currentEdition.id),
+              eq(editionPrograms.active, true),
             ),
           )
       : Promise.resolve([{ value: 0 }]),
@@ -200,19 +191,12 @@ export default async function AdminDashboard() {
           .from(galleries)
           .where(eq(galleries.editionId, currentEdition.id))
       : Promise.resolve([{ value: 0 }]),
-    database.select({ value: count() }).from(mediaAssets),
-    permissions.has("access.approve")
-      ? database
-          .select({ value: count() })
-          .from(accessRequests)
-          .where(eq(accessRequests.status, "open"))
-      : Promise.resolve([{ value: 0 }]),
     currentEdition
       ? database
-          .select({ value: count() })
+          .select({ slotKey: siteAssetBindings.slotKey, mediaId: siteAssetBindings.mediaId })
           .from(siteAssetBindings)
           .where(eq(siteAssetBindings.editionId, currentEdition.id))
-      : Promise.resolve([{ value: 0 }]),
+      : Promise.resolve([]),
     currentEdition
       ? database
           .select({ value: count() })
@@ -224,8 +208,15 @@ export default async function AdminDashboard() {
           .select({
             logoMediaId: editions.logoMediaId,
             slogan: editions.slogan,
+            organizationPeriodLabel: organizationPeriods.label,
+            organizationPeriodStartYear: organizationPeriods.startYear,
+            organizationPeriodEndYear: organizationPeriods.endYear,
           })
           .from(editions)
+          .leftJoin(
+            organizationPeriods,
+            eq(organizationPeriods.id, editions.organizationPeriodId),
+          )
           .where(eq(editions.id, currentEdition.id))
           .limit(1)
       : Promise.resolve([]),
@@ -233,24 +224,31 @@ export default async function AdminDashboard() {
   ]);
 
   const totalParticipants = participantCountRows[0]?.value ?? 0;
-  const totalFinalists = finalistCountRows[0]?.value ?? 0;
+  const totalActiveParticipants = activeParticipantCountRows[0]?.value ?? 0;
+  const totalPrograms = programCountRows[0]?.value ?? 0;
   const totalNews = newsCountRows[0]?.value ?? 0;
   const totalSponsors = sponsorCountRows[0]?.value ?? 0;
   const totalEvents = eventCountRows[0]?.value ?? 0;
   const totalVoting = votingCountRows[0]?.value ?? 0;
   const totalGalleries = galleryCountRows[0]?.value ?? 0;
-  const boundSiteAssets = siteAssetBindingRows[0]?.value ?? 0;
+  const requiredSiteAssetSlots = SITE_ASSET_SLOTS.filter((slot) => slot.required);
+  const requiredSiteAssetKeys = new Set(requiredSiteAssetSlots.map((slot) => slot.slotKey));
+  const boundSiteAssets = siteAssetBindingRows.filter(
+    (binding) => binding.mediaId && requiredSiteAssetKeys.has(binding.slotKey),
+  ).length;
   const totalCommittee = committeeCountRows[0]?.value ?? 0;
   const editionDetailRow = editionDetailRows[0];
-  const totalManifestSlots = SITE_ASSET_SLOTS.length;
+  const totalManifestSlots = requiredSiteAssetSlots.length;
 
   // Readiness Checklist Calculation
   const isIdentityReady = Boolean(
     editionDetailRow?.logoMediaId && editionDetailRow?.slogan?.trim(),
   );
+  const isProgramsReady = totalPrograms > 0;
   const isSiteAssetsReady = boundSiteAssets >= totalManifestSlots;
   const isCommitteeReady = totalCommittee > 0;
-  const isFinalistsReady = totalFinalists > 0;
+  const isParticipantsReady = totalActiveParticipants > 0;
+  const isEventsReady = totalEvents > 0;
   const isVotingReady = totalVoting > 0;
   const isSponsorsReady = totalSponsors > 0;
   const isNewsReady = totalNews > 0;
@@ -258,57 +256,71 @@ export default async function AdminDashboard() {
 
   const readinessItems = [
     {
-      label: "Identitas Edisi",
+      label: "Identitas edisi",
       description: "Logo edisi dan slogan Pasanggiri",
       ready: isIdentityReady,
       href: "/admin/content/edition-settings",
       detail: isIdentityReady ? "Lengkap" : "Logo/slogan belum diisi",
     },
     {
-      label: "Aset Situs Tetap",
+      label: "Program unggulan",
+      description: "Program utama edisi",
+      ready: isProgramsReady,
+      href: "/admin/content/edition-settings",
+      detail: `${totalPrograms} program aktif`,
+    },
+    {
+      label: "Aset situs",
       description: "Slot gambar hero, banner, dan kategori",
       ready: isSiteAssetsReady,
       href: "/admin/content/site-assets",
       detail: `${boundSiteAssets}/${totalManifestSlots} slot terisi`,
     },
     {
-      label: "Struktur Panitia",
+      label: "Struktur panitia",
       description: "Susunan panitia pelaksana edisi",
       ready: isCommitteeReady,
       href: "/admin/content/committee",
       detail: `${totalCommittee} penugasan panitia`,
     },
     {
-      label: "Finalis Pasanggiri",
-      description: "Peserta berstatus finalis aktif",
-      ready: isFinalistsReady,
+      label: "Peserta Pasanggiri",
+      description: "Peserta aktif edisi",
+      ready: isParticipantsReady,
       href: "/admin/content/participants",
-      detail: `${totalFinalists} finalis (${totalParticipants} total peserta)`,
+      detail: `${totalActiveParticipants}/${totalParticipants} peserta aktif`,
     },
     {
-      label: "Kampanye Voting",
+      label: "Rangkaian acara",
+      description: "Agenda edisi",
+      ready: isEventsReady,
+      href: "/admin/content/events",
+      detail: `${totalEvents} acara`,
+    },
+    {
+      label: "Kampanye voting",
       description: "Kampanye voting kameumeut edisi aktif",
       ready: isVotingReady,
       href: "/admin/voting",
       detail: `${totalVoting} kampanye terdaftar`,
     },
     {
-      label: "Sponsor & Mitra",
+      label: "Sponsor dan mitra",
       description: "Logo dan partner pendukung acara",
       ready: isSponsorsReady,
       href: "/admin/content/sponsors",
       detail: `${totalSponsors} sponsor terdaftar`,
     },
     {
-      label: "Berita Editorial",
+      label: "Berita",
       description: "Artikel yang telah dipublikasikan",
       ready: isNewsReady,
       href: "/admin/content/news",
-      detail: `${totalNews} berita published`,
+      detail: `${totalNews} berita terbit`,
     },
     {
-      label: "Galeri Dokumentasi",
-      description: "Album dokumentasi foto & video",
+      label: "Galeri",
+      description: "Album foto dan video",
       ready: isGalleriesReady,
       href: "/admin/content/galleries",
       detail: `${totalGalleries} album galeri`,
@@ -330,7 +342,7 @@ export default async function AdminDashboard() {
     <AdminPage
       eyebrow="Studio / dashboard"
       title={`Selamat Datang, ${session.user.name.split(" ")[0]}`}
-      description="Pusat kendali konten dan operasional CMS PAMOKA Garut berbasis edisi tahunan."
+      description="Kelola konten dan operasional CMS."
       action={
         <AdminLinkButton href="/" variant="secondary">
           Lihat Situs Publik <ArrowUpRight size={15} />
@@ -344,7 +356,7 @@ export default async function AdminDashboard() {
       >
         <AdminStatCard
           label="Edisi Terpilih"
-          value={currentEdition?.year ?? "—"}
+          value={currentEdition?.year ?? "-"}
           note={
             currentEdition
               ? `${currentEdition.name} (${editionStatusLabel})`
@@ -353,11 +365,11 @@ export default async function AdminDashboard() {
           icon="calendar"
         />
         <AdminStatCard
-          label="Finalis Aktif"
-          value={totalFinalists}
+          label="Peserta Aktif"
+          value={totalActiveParticipants}
           note={
             currentEdition
-              ? `${totalFinalists} dari ${totalParticipants} peserta terdaftar`
+              ? `${totalActiveParticipants} dari ${totalParticipants} peserta terdaftar`
               : "Pilih edisi untuk melihat data"
           }
           icon="users"
@@ -390,12 +402,12 @@ export default async function AdminDashboard() {
       {/* Edition Readiness Checklist Panel */}
       {currentEdition && (
         <div className="mt-6">
-          <AdminCard className="p-6 space-y-5">
+          <AdminCard className="space-y-5 p-6 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="grid size-7 place-items-center rounded-md bg-fb/10 text-fb font-bold">
-                    <Sparkles size={16} />
+                    <ClipboardList size={16} />
                   </span>
                   <h3 className="font-montserrat text-base font-semibold text-foreground">
                     Kesiapan Konten {currentEdition.name} ({currentEdition.year})
@@ -428,6 +440,15 @@ export default async function AdminDashboard() {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/40 px-4 py-3">
+              <p className="text-xs text-muted-foreground">Periode kepengurusan terkait</p>
+              <p className="mt-1 font-montserrat text-sm font-semibold text-foreground">
+                {editionDetailRow?.organizationPeriodLabel
+                  ? `${editionDetailRow.organizationPeriodLabel} (${editionDetailRow.organizationPeriodStartYear}-${editionDetailRow.organizationPeriodEndYear})`
+                  : "Belum terhubung"}
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

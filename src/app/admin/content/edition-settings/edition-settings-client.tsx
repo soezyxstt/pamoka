@@ -4,17 +4,15 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
-  Edit2,
-  HelpCircle,
+  CircleAlert,
+  Pencil,
   Plus,
-  Sparkles,
   Trash2,
 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import {
-  AdminBadge,
   AdminButton,
   AdminCard,
   AdminCardHeader,
@@ -35,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +42,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import type { EditionProgramRow } from "@/server/db/schema";
 import {
   deleteEditionProgramAction,
@@ -66,6 +66,22 @@ export type EditionSettingsClientProps = {
   canManageContent?: boolean;
 };
 
+function StatusTag({ ready, label }: { ready: boolean; label?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold",
+        ready
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-amber-200 bg-amber-50 text-amber-800",
+      )}
+    >
+      {ready ? <CheckCircle2 className="size-3.5" /> : <CircleAlert className="size-3.5" />}
+      {label ?? (ready ? "Siap" : "Perlu dilengkapi")}
+    </span>
+  );
+}
+
 export function EditionSettingsClient({
   edition,
   initialLogoAsset,
@@ -74,45 +90,31 @@ export function EditionSettingsClient({
 }: EditionSettingsClientProps) {
   const [isPending, startTransition] = useTransition();
 
-  // Edition identity form state
   const [slogan, setSlogan] = useState(edition.slogan ?? "");
   const [logoAsset, setLogoAsset] = useState<MediaAssetSummary | null>(initialLogoAsset);
-
-  // Programs state
   const [programs, setPrograms] = useState<EditionProgramRow[]>(initialPrograms);
   const [editingProgram, setEditingProgram] = useState<EditionProgramRow | null>(null);
   const [isProgramDialogOpen, setIsProgramDialogOpen] = useState(false);
   const [deletingProgram, setDeletingProgram] = useState<EditionProgramRow | null>(null);
-
-  // Program form dialog inputs
   const [programTitle, setProgramTitle] = useState("");
-  const [programDesc, setProgramDesc] = useState("");
+  const [programDescription, setProgramDescription] = useState("");
   const [programActive, setProgramActive] = useState(true);
 
-  // Sync initial props
-  const [prevInitialPrograms, setPrevInitialPrograms] = useState(initialPrograms);
-  if (initialPrograms !== prevInitialPrograms) {
-    setPrevInitialPrograms(initialPrograms);
-    setPrograms(initialPrograms);
-  }
-
-  const handleIdentitySubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleIdentitySubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canManageContent) return;
 
     const formData = new FormData();
-    if (logoAsset?.id) {
-      formData.set("logoMediaId", logoAsset.id);
-    }
+    formData.set("logoMediaId", logoAsset?.id ?? "");
     formData.set("slogan", slogan.trim());
     formData.set("version", String(edition.version));
 
     startTransition(async () => {
       try {
         await updateEditionSettingsAction(formData);
-        toast.success("Pengaturan identitas edisi berhasil disimpan");
+        toast.success("Identitas edisi disimpan");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Gagal menyimpan identitas edisi");
+        toast.error(err instanceof Error ? err.message : "Identitas edisi gagal disimpan");
       }
     });
   };
@@ -120,7 +122,7 @@ export function EditionSettingsClient({
   const openAddProgramDialog = () => {
     setEditingProgram(null);
     setProgramTitle("");
-    setProgramDesc("");
+    setProgramDescription("");
     setProgramActive(true);
     setIsProgramDialogOpen(true);
   };
@@ -128,14 +130,18 @@ export function EditionSettingsClient({
   const openEditProgramDialog = (program: EditionProgramRow) => {
     setEditingProgram(program);
     setProgramTitle(program.title);
-    setProgramDesc(program.description ?? "");
+    setProgramDescription(program.description ?? "");
     setProgramActive(program.active);
     setIsProgramDialogOpen(true);
   };
 
-  const handleSaveProgram = (e: React.FormEvent) => {
+  const handleSaveProgram = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!programTitle.trim()) {
+    if (!canManageContent) return;
+
+    const title = programTitle.trim();
+    const description = programDescription.trim();
+    if (!title) {
       toast.error("Judul program wajib diisi");
       return;
     }
@@ -147,44 +153,56 @@ export function EditionSettingsClient({
     } else {
       formData.set("displayOrder", String(programs.length));
     }
-    formData.set("title", programTitle.trim());
-    formData.set("description", programDesc.trim());
+    formData.set("title", title);
+    formData.set("description", description);
     formData.set("active", programActive ? "true" : "false");
 
     startTransition(async () => {
       try {
         await saveEditionProgramAction(formData);
+        if (editingProgram) {
+          setPrograms((current) => current.map((program) => (
+            program.id === editingProgram.id
+              ? { ...program, title, description: description || null, active: programActive }
+              : program
+          )));
+        }
         setIsProgramDialogOpen(false);
-        toast.success(editingProgram ? "Program berhasil diperbarui" : "Program baru berhasil ditambahkan");
+        toast.success(editingProgram ? "Program diperbarui" : "Program ditambahkan");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Gagal menyimpan program");
+        toast.error(err instanceof Error ? err.message : "Program gagal disimpan");
       }
     });
   };
 
   const handleDeleteProgram = () => {
-    if (!deletingProgram) return;
+    if (!deletingProgram || !canManageContent) return;
 
+    const program = deletingProgram;
     const formData = new FormData();
-    formData.set("id", deletingProgram.id);
+    formData.set("id", program.id);
 
     startTransition(async () => {
       try {
         await deleteEditionProgramAction(formData);
+        setPrograms((current) => current.filter((item) => item.id !== program.id));
         setDeletingProgram(null);
-        toast.success("Program berhasil dihapus");
+        toast.success("Program dihapus");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Gagal menghapus program");
+        toast.error(err instanceof Error ? err.message : "Program gagal dihapus");
       }
     });
   };
 
   const handleMoveProgram = (index: number, direction: "up" | "down") => {
+    if (!canManageContent) return;
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= programs.length) return;
 
+    const previous = programs;
     const reordered = [...programs];
     const [moved] = reordered.splice(index, 1);
+    if (!moved) return;
     reordered.splice(targetIndex, 0, moved);
     setPrograms(reordered);
 
@@ -195,33 +213,39 @@ export function EditionSettingsClient({
         await reorderEditionProgramsAction(idList);
         toast.success("Urutan program diperbarui");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Gagal memperbarui urutan");
+        setPrograms(previous);
+        toast.error(err instanceof Error ? err.message : "Urutan program gagal diperbarui");
       }
     });
   };
 
   const isLogoSet = Boolean(logoAsset?.id);
-  const isSloganSet = Boolean(slogan.trim());
-  const activeProgramsCount = programs.filter((p) => p.active).length;
-  const isComplete = isLogoSet && isSloganSet && activeProgramsCount > 0;
+  const isSloganSet = slogan.trim().length > 0;
+  const activeProgramsCount = programs.filter((program) => program.active).length;
+  const completionItems = [
+    { label: "Logo edisi", ready: isLogoSet, detail: isLogoSet ? "Terpasang" : "Belum dipilih" },
+    { label: "Slogan", ready: isSloganSet, detail: isSloganSet ? "Terisi" : "Belum diisi" },
+    {
+      label: "Program aktif",
+      ready: activeProgramsCount > 0,
+      detail: `${activeProgramsCount} aktif dari ${programs.length}`,
+    },
+  ];
+  const completedItems = completionItems.filter((item) => item.ready).length;
+  const isComplete = completedItems === completionItems.length;
 
   return (
-    <div className="space-y-6">
-      {/* Overview & Completeness Row */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left 2 Cols: Identity Form */}
-        <div className="lg:col-span-2">
-          <AdminCard>
-            <AdminCardHeader
-              eyebrow="Identitas utama"
-              title="Logo dan Slogan Edisi"
-              description="Informasi visual dan tagline resmi yang mewakili edisi terpilih."
-            />
-            <form onSubmit={handleIdentitySubmit} className="space-y-5 p-5">
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.75fr)]">
+        <AdminCard padding="none" className="overflow-hidden">
+          <div className="border-b border-border/70 px-5 py-4 sm:px-6">
+            <AdminCardHeader eyebrow="Identitas edisi" title="Logo dan slogan" />
+          </div>
+          <form onSubmit={handleIdentitySubmit} className="space-y-5 p-5 sm:p-6">
               <AdminMediaField
                 name="logoMediaId"
-                label="Logo resmi edisi"
-                hint="Format PNG atau WebP berlatar transparan disarankan. Rasio persegi 1:1."
+                label="Logo resmi"
+                hint="Gunakan gambar persegi dengan latar transparan bila tersedia."
                 aspectRatioHint="1:1"
                 acceptType="image"
                 initialAsset={logoAsset}
@@ -230,226 +254,167 @@ export function EditionSettingsClient({
                 activeEditionId={edition.id}
               />
 
-              <AdminField
-                label="Slogan edisi"
-                hint="Tagline resmi untuk edisi ini (misalnya: Nu Nyunda Tur Nyakola)."
-              >
+              <AdminField label="Slogan" hint="Kalimat singkat yang mewakili edisi ini.">
                 <AdminInput
                   value={slogan}
                   onChange={(e) => setSlogan(e.target.value)}
                   placeholder="Contoh: Nu Nyunda Tur Nyakola"
+                  maxLength={160}
                   disabled={!canManageContent || isPending}
                 />
               </AdminField>
 
-              <div className="flex items-center justify-end border-t border-border pt-4">
-                <AdminButton
-                  type="submit"
-                  disabled={!canManageContent || isPending}
-                  className="bg-dgb text-white hover:bg-dgb-600"
-                >
-                  {isPending ? "Menyimpan..." : "Simpan identitas edisi"}
+              <div className="flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">Perubahan berlaku untuk edisi yang dipilih.</p>
+                <AdminButton type="submit" disabled={!canManageContent || isPending}>
+                  {isPending ? "Menyimpan..." : "Simpan perubahan"}
                 </AdminButton>
               </div>
             </form>
-          </AdminCard>
-        </div>
+        </AdminCard>
 
-        {/* Right 1 Col: Completeness Card */}
-        <div>
-          <AdminCard className="h-full flex flex-col justify-between">
-            <AdminCardHeader
-              eyebrow="Status kelengkapan"
-              title="Ringkasan Identitas"
-              description="Indikator kesiapan identitas edisi sebelum publikasi."
-              action={
-                <AdminBadge
-                  value={isComplete ? "ready" : "draft"}
-                  className={isComplete ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}
-                />
-              }
-            />
-
-            <div className="space-y-4 p-5 flex-1">
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between rounded-lg border border-border p-3 bg-muted/30">
-                  <div className="flex items-center gap-2.5">
-                    {isLogoSet ? (
-                      <CheckCircle2 size={16} className="text-dgb" />
-                    ) : (
-                      <HelpCircle size={16} className="text-amber-500" />
-                    )}
-                    <span className="font-medium text-foreground">Logo edisi</span>
-                  </div>
-                  <span className="font-semibold text-muted-foreground">
-                    {isLogoSet ? "Terpasang" : "Belum diisi"}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border border-border p-3 bg-muted/30">
-                  <div className="flex items-center gap-2.5">
-                    {isSloganSet ? (
-                      <CheckCircle2 size={16} className="text-dgb" />
-                    ) : (
-                      <HelpCircle size={16} className="text-amber-500" />
-                    )}
-                    <span className="font-medium text-foreground">Slogan edisi</span>
-                  </div>
-                  <span className="font-semibold text-muted-foreground">
-                    {isSloganSet ? "Terisi" : "Belum diisi"}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border border-border p-3 bg-muted/30">
-                  <div className="flex items-center gap-2.5">
-                    {activeProgramsCount > 0 ? (
-                      <CheckCircle2 size={16} className="text-dgb" />
-                    ) : (
-                      <HelpCircle size={16} className="text-amber-500" />
-                    )}
-                    <span className="font-medium text-foreground">Program unggulan</span>
-                  </div>
-                  <span className="font-semibold text-muted-foreground">
-                    {activeProgramsCount} aktif ({programs.length} total)
-                  </span>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-dgb-100 bg-dgb-50/40 p-3.5 text-xs text-dgb-900 space-y-1">
-                <p className="font-semibold flex items-center gap-1.5 text-dgb">
-                  <Sparkles size={14} /> Catatan Identitas
-                </p>
-                <p className="text-[11px] leading-relaxed text-dgb-900/80">
-                  Logo dan slogan edisi akan digunakan pada banner hero, materi publikasi, serta sertifikat resmi peserta edisi ini.
+        <AdminCard padding="none" className="overflow-hidden">
+          <div className="border-b border-border/70 px-5 py-4 sm:px-6">
+            <AdminCardHeader eyebrow="Pemeriksaan" title="Kelengkapan identitas" />
+          </div>
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Siap digunakan</p>
+                <p className="mt-1 font-montserrat text-3xl font-semibold tracking-[-0.04em] text-dgb-900">
+                  {completedItems}/{completionItems.length}
                 </p>
               </div>
+              <StatusTag ready={isComplete} />
             </div>
-          </AdminCard>
-        </div>
+
+            <div className="space-y-2" aria-label="Daftar pemeriksaan identitas">
+              {completionItems.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {item.ready ? <CheckCircle2 className="size-4 shrink-0 text-dgb" /> : <CircleAlert className="size-4 shrink-0 text-fb-600" />}
+                    <span className="truncate text-xs font-semibold text-foreground">{item.label}</span>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{item.detail}</span>
+                </div>
+              ))}
+            </div>
+
+            <p className="border-l-2 border-fb bg-fb-50/50 px-3 py-2.5 text-xs leading-5 text-foreground">
+              {isComplete
+                ? "Identitas sudah lengkap untuk ditinjau."
+                : "Lengkapi bagian yang belum siap sebelum ditinjau."}
+            </p>
+          </div>
+        </AdminCard>
       </div>
 
-      {/* Program Unggulan Section */}
-      <AdminCard>
-        <AdminCardHeader
-          eyebrow="Program kerja edisi"
-          title="Daftar Program Unggulan"
-          description="Rangkaian program prioritas dan unggulan yang diselenggarakan pada edisi ini."
-          action={
-            canManageContent ? (
-              <AdminButton
-                type="button"
-                onClick={openAddProgramDialog}
-                className="bg-dgb text-white hover:bg-dgb-600 gap-1.5"
-              >
-                <Plus size={14} /> Tambah program
-              </AdminButton>
-            ) : null
-          }
-        />
+      <AdminCard padding="none" className="overflow-hidden">
+        <div className="border-b border-border/70 px-5 py-4 sm:px-6">
+          <AdminCardHeader
+            eyebrow="Program edisi"
+            title="Program unggulan"
+            action={
+              canManageContent ? (
+                <AdminButton type="button" onClick={openAddProgramDialog}>
+                  <Plus className="size-4" />
+                  Tambah program
+                </AdminButton>
+              ) : null
+            }
+          />
+        </div>
 
         {programs.length === 0 ? (
-          <div className="p-5">
+          <div className="p-5 sm:p-6">
             <AdminEmptyState
-              icon="sparkles"
-              title="Belum ada program unggulan"
-              description="Tambahkan program unggulan pertama untuk melengkapi profil kegiatan edisi ini."
+              icon="award"
+              title="Belum ada program"
+              description="Tambahkan program unggulan yang ingin ditampilkan pada edisi ini."
             />
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {programs.map((prog, idx) => (
-              <div
-                key={prog.id}
-                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-muted/20"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-dgb-50 text-xs font-bold text-dgb border border-dgb-200">
-                    {idx + 1}
+          <ol className="divide-y divide-border/70" aria-label="Urutan program unggulan">
+            {programs.map((program, index) => (
+              <li key={program.id} className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-md border border-dgb-100 bg-dgb-50 text-xs font-bold text-dgb-800">
+                    {index + 1}
                   </span>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-montserrat text-sm font-semibold text-dgb-900">
-                        {prog.title}
-                      </h4>
-                      <AdminBadge
-                        value={prog.active ? "active" : "draft"}
-                        className={prog.active ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}
-                      />
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-montserrat text-sm font-semibold text-dgb-900">{program.title}</h3>
+                      <StatusTag ready={program.active} label={program.active ? "Aktif" : "Tidak aktif"} />
                     </div>
-                    {prog.description ? (
-                      <p className="text-xs text-muted-foreground line-clamp-2 max-w-xl">
-                        {prog.description}
-                      </p>
-                    ) : null}
+                    {program.description ? <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{program.description}</p> : null}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 self-end sm:self-center">
-                  {canManageContent ? (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={idx === 0 || isPending}
-                        onClick={() => handleMoveProgram(idx, "up")}
-                        aria-label="Pindahkan program ke atas"
-                        className="size-8 p-0 text-muted-foreground hover:text-foreground"
-                      >
-                        <ArrowUp size={13} />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={idx === programs.length - 1 || isPending}
-                        onClick={() => handleMoveProgram(idx, "down")}
-                        aria-label="Pindahkan program ke bawah"
-                        className="size-8 p-0 text-muted-foreground hover:text-foreground"
-                      >
-                        <ArrowDown size={13} />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isPending}
-                        onClick={() => openEditProgramDialog(prog)}
-                        aria-label="Edit program"
-                        className="size-8 p-0 text-dgb border-dgb-200 hover:bg-dgb-50"
-                      >
-                        <Edit2 size={13} />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isPending}
-                        onClick={() => setDeletingProgram(prog)}
-                        aria-label="Hapus program"
-                        className="size-8 p-0 text-destructive border-rose-200 hover:bg-rose-50"
-                      >
-                        <Trash2 size={13} />
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
+                {canManageContent ? (
+                  <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={index === 0 || isPending}
+                      onClick={() => handleMoveProgram(index, "up")}
+                      aria-label={`Naikkan ${program.title}`}
+                      title="Naikkan urutan"
+                      className="size-8 text-muted-foreground"
+                    >
+                      <ArrowUp className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={index === programs.length - 1 || isPending}
+                      onClick={() => handleMoveProgram(index, "down")}
+                      aria-label={`Turunkan ${program.title}`}
+                      title="Turunkan urutan"
+                      className="size-8 text-muted-foreground"
+                    >
+                      <ArrowDown className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={isPending}
+                      onClick={() => openEditProgramDialog(program)}
+                      aria-label={`Edit ${program.title}`}
+                      title="Edit program"
+                      className="size-8 border-dgb-200 text-dgb hover:bg-dgb-50"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={isPending}
+                      onClick={() => setDeletingProgram(program)}
+                      aria-label={`Hapus ${program.title}`}
+                      title="Hapus program"
+                      className="size-8 border-rose-200 text-destructive hover:bg-rose-50"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                ) : null}
+              </li>
             ))}
-          </div>
+          </ol>
         )}
       </AdminCard>
 
-      {/* Program Add/Edit Dialog */}
       <Dialog open={isProgramDialogOpen} onOpenChange={setIsProgramDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-montserrat text-lg font-semibold text-dgb-900">
-              {editingProgram ? "Edit Program Unggulan" : "Tambah Program Unggulan"}
+              {editingProgram ? "Edit program unggulan" : "Tambah program unggulan"}
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Masukkan rincian program kerja utama untuk edisi ini.
-            </DialogDescription>
+            <DialogDescription className="text-xs">Isi judul, ringkasan, dan status program.</DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveProgram} className="space-y-4 pt-2">
@@ -457,75 +422,74 @@ export function EditionSettingsClient({
               <AdminInput
                 value={programTitle}
                 onChange={(e) => setProgramTitle(e.target.value)}
-                placeholder="Contoh: Pasanggiri Mojang Jajaka Garut"
+                placeholder="Contoh: Pasanggiri Mojang Jajaka"
+                maxLength={160}
                 required
                 autoFocus
+                disabled={isPending}
               />
             </AdminField>
 
-            <AdminField label="Deskripsi program" hint="Ringkasan tujuan atau agenda program kerja.">
+            <AdminField label="Deskripsi singkat" hint="Jelaskan tujuan atau agenda utama program.">
               <AdminTextarea
-                value={programDesc}
-                onChange={(e) => setProgramDesc(e.target.value)}
-                placeholder="Tuliskan deskripsi singkat program..."
+                value={programDescription}
+                onChange={(e) => setProgramDescription(e.target.value)}
+                placeholder="Tuliskan ringkasan program"
+                maxLength={500}
                 rows={3}
+                disabled={isPending}
               />
             </AdminField>
 
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="checkbox"
+            <div className="flex items-start gap-2">
+              <Checkbox
                 id="programActiveCheckbox"
                 checked={programActive}
-                onChange={(e) => setProgramActive(e.target.checked)}
-                className="size-4 rounded border-border text-dgb focus:ring-dgb"
+                onCheckedChange={(checked) => setProgramActive(checked === true)}
+                disabled={isPending}
               />
-              <label htmlFor="programActiveCheckbox" className="text-xs font-medium text-foreground cursor-pointer">
+              <label htmlFor="programActiveCheckbox" className="text-xs font-medium leading-4 text-foreground">
                 Tampilkan sebagai program aktif
               </label>
             </div>
 
-            <DialogFooter className="border-t border-border pt-3">
+            <DialogFooter className="border-t border-border/70 pt-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsProgramDialogOpen(false)}
-                className="text-xs h-9"
+                disabled={isPending}
               >
                 Batal
               </Button>
               <Button
                 type="submit"
                 disabled={isPending || !programTitle.trim()}
-                className="bg-dgb text-white text-xs h-9 hover:bg-dgb-600"
+                className="bg-dgb text-white hover:bg-dgb-600"
               >
-                {isPending ? "Menyimpan..." : editingProgram ? "Simpan perubahan" : "Tambahkan program"}
+                {isPending ? "Menyimpan..." : "Simpan program"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Program Confirmation Dialog */}
       <AlertDialog
         open={Boolean(deletingProgram)}
         onOpenChange={(open) => !open && setDeletingProgram(null)}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-montserrat">
               Hapus program unggulan?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Program &quot;{deletingProgram?.title}&quot; akan dihapus secara permanen dari daftar program edisi ini.
+              Program &quot;{deletingProgram?.title}&quot; akan dihapus dari daftar edisi ini.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteProgram}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleDeleteProgram} disabled={isPending} className="bg-destructive text-white hover:bg-destructive/90">
               Hapus program
             </AlertDialogAction>
           </AlertDialogFooter>

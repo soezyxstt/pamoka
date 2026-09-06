@@ -51,6 +51,12 @@ export type NewsListClientProps = {
   canEdit: boolean;
 };
 
+function newsStatusLabel(status: string): string {
+  if (status === "published") return "Terbit";
+  if (status === "archived") return "Arsip";
+  return "Draft";
+}
+
 export function NewsListClient({
   initialArticles,
   editionName,
@@ -116,8 +122,8 @@ export function NewsListClient({
             [
               { key: "all", label: "Semua" },
               { key: "draft", label: "Draft" },
-              { key: "published", label: "Published" },
-              { key: "archived", label: "Archived" },
+              { key: "published", label: "Terbit" },
+              { key: "archived", label: "Arsip" },
             ] as const
           ).map((tab) => (
             <Button
@@ -133,7 +139,7 @@ export function NewsListClient({
               }`}
             >
               {tab.label}
-              <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.2 text-[10px] text-muted-foreground">
+              <span className="ml-1.5 rounded-sm bg-muted px-1.5 py-0.2 text-[10px] text-muted-foreground">
                 {tab.key === "all"
                   ? articles.length
                   : articles.filter((a) => a.status === tab.key).length}
@@ -201,7 +207,7 @@ export function NewsListClient({
               {/* Info Area */}
               <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <AdminBadge value={article.status} />
+                  <AdminBadge value={newsStatusLabel(article.status)} />
                   <span className="font-mono text-xs text-muted-foreground">
                     /berita/{article.slug}
                   </span>
@@ -245,7 +251,7 @@ export function NewsListClient({
                     size="sm"
                     className="h-8 gap-1.5 border-border text-xs hover:border-dgb-200 hover:bg-dgb-50 hover:text-dgb"
                   >
-                    <FileEdit size={13} /> Edit & Preview
+                    <FileEdit size={13} /> Edit dan pratinjau
                   </Button>
                 </Link>
 

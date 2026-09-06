@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useAction } from "next-safe-action/hooks";
 import { updateFinalistIncome } from './action';
@@ -31,9 +32,9 @@ export default function InputForm({ name, id, value, total }: { name: string, id
           <Input type='number' value={income} onChange={(v) => setDraftIncome(v.target.value === "" ? 0 : Number(v.target.value))} placeholder='Vote' required
             className='h-9 w-24 rounded-lg border-slate-200 bg-white text-sm focus-visible:border-dgb-300 focus-visible:ring-dgb-50'
           />
-          <button type="submit" aria-label={`Simpan vote ${name}`} className="grid h-9 w-9 place-items-center rounded-lg bg-dgb text-white transition hover:bg-dgb-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-dgb-100">
+          <Button type="submit" variant="default" size="icon" aria-label={`Simpan vote ${name}`} className="size-9 rounded-lg bg-dgb text-white transition hover:bg-dgb-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-dgb-100">
             <ArrowUpRight size={16} />
-          </button>
+          </Button>
         </form>
       </TableCell >
       <TableCell className='px-4 text-center font-semibold text-dgb-900'>

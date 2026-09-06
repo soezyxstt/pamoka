@@ -22,14 +22,14 @@ export default async function SponsorsPage() {
       <AdminPage
         eyebrow="Konten / sponsor"
         title="Sponsor"
-        description="Kelola partner PAMOKA dan tingkat penampilannya per edisi."
+        description="Atur partner dan tingkat tampilannya."
       >
-        <AdminCard>
+        <AdminCard padding="none">
           <div className="p-8">
             <AdminEmptyState
-              icon="sparkles"
+              icon="handshake"
               title="Belum ada edisi dipilih"
-              description="Silakan buat atau pilih edisi pada selector di header untuk mengelola sponsor."
+              description="Pilih edisi pada selector di header untuk mulai."
             />
           </div>
         </AdminCard>
@@ -96,7 +96,7 @@ export default async function SponsorsPage() {
     <AdminPage
       eyebrow="Konten / sponsor"
       title="Sponsor"
-      description={`Kelola partner dan tingkat sponsorship PAMOKA untuk ${currentEdition.name} (${currentEdition.year}).`}
+      description="Atur partner dan tingkat tampilannya."
       action={<AdminBadge value={currentEdition.lifecycle} />}
     >
       <SponsorsClient

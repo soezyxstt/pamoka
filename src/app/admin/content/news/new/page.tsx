@@ -16,21 +16,20 @@ export default async function NewNewsPage() {
   }
 
   const canPublish = actor.effectivePermissions.has("content.publish");
-  const canManage =
-    actor.effectivePermissions.has("media.manage") ||
-    actor.effectivePermissions.has("news.manage");
+  const canManage = actor.effectivePermissions.has("media.manage");
 
   return (
     <AdminPage
       eyebrow="Studio / editorial"
       title="Tulis Berita Baru"
-      description={`Tulis draft berita baru untuk ${currentEdition.name} (${currentEdition.year}).`}
+      description="Susun berita dengan editor dan pratinjau langsung."
     >
       <NewsWorkspace
         editionName={currentEdition.name}
         activeEditionId={currentEdition.id}
         canPublish={canPublish}
         canManage={canManage}
+        canEdit
       />
     </AdminPage>
   );

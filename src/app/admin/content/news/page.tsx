@@ -47,19 +47,13 @@ export default async function NewsPage() {
     coverAlt: r.coverAlt,
   }));
 
-  const canEdit =
-    actor.effectivePermissions.has("content.edit") ||
-    actor.effectivePermissions.has("news.manage");
+  const canEdit = actor.effectivePermissions.has("content.edit");
 
   return (
     <AdminPage
       eyebrow="Studio / editorial"
       title="Berita"
-      description={
-        currentEdition
-          ? `Kelola dan publikasikan artikel berita untuk ${currentEdition.name} (${currentEdition.year}).`
-          : "Kelola artikel berita, draft konten, dan publikasi."
-      }
+      description="Tulis, pratinjau, dan terbitkan berita."
       action={
         currentEdition ? (
           <div className="flex items-center gap-2">

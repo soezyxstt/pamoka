@@ -18,7 +18,6 @@ import {
   Newspaper,
   Settings2,
   ShieldCheck,
-  Sparkles,
   Users,
   type LucideProps,
 } from "lucide-react";
@@ -41,7 +40,6 @@ export type AdminIconName =
   | "newspaper"
   | "settings"
   | "shield"
-  | "sparkles"
   | "users";
 
 const icons = {
@@ -62,7 +60,6 @@ const icons = {
   newspaper: Newspaper,
   settings: Settings2,
   shield: ShieldCheck,
-  sparkles: Sparkles,
   users: Users,
 };
 

@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client/node";
-import { and, desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import assert from "node:assert/strict";
@@ -278,6 +278,65 @@ test("galleryItems dimasukkan ke gallery yang sama tanpa duplikasi album", async
     assert.equal(items[0].mediaId, "media-img-1");
     assert.equal(items[1].mediaId, "media-img-2");
     assert.equal(items[2].youtubeId, "dQw4w9WgXcQ");
+  } finally {
+    client.close();
+  }
+});
+
+test("galleryItems mewajibkan tepat satu sumber", async () => {
+  const { client, db } = await createTestDatabase();
+  try {
+    const now = new Date("2026-09-05T00:00:00.000Z");
+    await db.insert(editions).values({
+      id: "ed-source-check",
+      year: 2026,
+      slug: "source-check",
+      name: "Pasanggiri MOKA 2026",
+      lifecycle: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(galleries).values({
+      id: "gal-source-check",
+      editionId: "ed-source-check",
+      title: "Uji sumber",
+      slug: "uji-sumber",
+      ownerType: "standalone",
+      ownerId: "ed-source-check",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(mediaAssets).values({
+      id: "media-source-check",
+      provider: "uploadthing",
+      url: "https://utfs.io/f/source.webp",
+      filename: "source.webp",
+      mimeType: "image/webp",
+      bytes: 10,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await assert.rejects(
+      db.insert(galleryItems).values({
+        id: "item-no-source",
+        galleryId: "gal-source-check",
+        mediaId: null,
+        youtubeId: null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+    await assert.rejects(
+      db.insert(galleryItems).values({
+        id: "item-two-sources",
+        galleryId: "gal-source-check",
+        mediaId: "media-source-check",
+        youtubeId: "dQw4w9WgXcQ",
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
   } finally {
     client.close();
   }

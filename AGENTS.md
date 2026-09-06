@@ -2,9 +2,9 @@
 
 # This is NOT the Next.js you know
 
-This version has breaking changes; APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
-This block is written and re-added by `next dev`; verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
 
@@ -166,6 +166,11 @@ All uploads go through **UploadThing** only. There is no R2, S3, or local-blob w
 6. No production migration, super-admin promotion, upload, deploy, or public cutover without the operator's explicit authorization for that exact action and target. Follow the runbooks in `docs/runbooks/`.
 7. The public site is currently the source of truth (hard-coded content). Database content is exercised through the admin preview/staging flow until Plan 010 cutover is authorized. Do not wire public routes to live CMS data ahead of that.
 8. UI copy: Bahasa Indonesia, short labels, sentence case, numbers over sentences. No exclamation marks, no filler, no em/en dashes.
+   - Tampilkan deskripsi admin hanya saat membantu keputusan atau tindakan; jangan mengulang judul dan konteks edisi.
+   - Jangan gunakan ikon `Sparkle` atau `Sparkles` di area admin maupun UI baru; pilih ikon semantik yang menjelaskan fungsi. Jangan mengubah public UI existing untuk aturan ini.
+   - Semua kontrol admin memakai primitive shadcn lokal berbasis Radix atau wrapper Admin primitive; migrasi caller dilakukan bertahap sesuai checkpoint.
+   - Voting selalu tersedia untuk setiap edisi; kampanye, tally, dan visibilitas hasil tetap terisolasi berdasarkan edisi.
+   - Scrollbar kustom hanya boleh scoped pada area admin; jangan mengubah scrollbar global, public site, font, atau globals untuk kebutuhan admin.
 9. **Auto-update docs**: every time you add a feature, table, env var, or change core architecture, update the relevant docs:
    - `docs/admin-guide-id.md` for user-facing admin workflows
    - `docs/runbooks/*` for manual operator procedures
@@ -192,21 +197,21 @@ All uploads go through **UploadThing** only. There is no R2, S3, or local-blob w
 | 009 | Make voting campaigns, tallies, visibility, and results manageable | DONE |
 | 010 | Import 2025 content, run end-to-end QA, and perform a reversible cutover | IN PROGRESS (not authorized) |
 | 011 | Unify public and admin design, media navigation, and annual CMS context | DONE |
-| 012 | Admin CMS PAMOKA Berbasis Edisi | DONE |
+| 012 | Admin CMS PAMOKA Berbasis Edisi | IN PROGRESS (rework) |
 
 ### Verified / working
 
 - Turso (libSQL) + Drizzle data layer with the seed of 44 finalists and 572 zero-income daily rows over 13 dates (`npm run db:seed`; refuses non-seed databases).
 - Better Auth Google login with pending access requests, composable roles, permission overrides, and transactional audit. No automatic super-admin bootstrap; the first super admin is promoted manually in Turso per `docs/runbooks/bootstrap-super-admin.md`.
 - Admin shell with permission-filtered navigation (`/admin`), active edition selector in header with cookie persistence, collapsible content sidebar, reusable media picker (`AdminMediaPicker`), and edition-scoped folders.
-- Complete Plan 012 implementation:
+- Baseline Plan 012 implementation remains available while the supervisor-gated rework proceeds:
   * Identitas edisi & program unggulan (`/admin/content/edition-settings`).
-  * Aset situs tetap dengan 7 slot manifest terdefinisi (`/admin/content/site-assets`).
+  * Aset situs tetap dengan 24 slot manifest terdefinisi (`/admin/content/site-assets`).
   * Manajemen sponsor dengan modal sheet editor, tier grouping, dan live card preview (`/admin/content/sponsors`).
   * Studio berita TipTap WYSIWYG dengan image insertion, autosave draft, dan live split preview (`/admin/content/news`).
   * Kepengurusan organisasi multi-periode dengan struktur pohon hierarkis dan direktori orang (`/admin/organization`).
   * Panitia pelaksana terisolasi per edisi dengan struktur pohon hingga 4 level (`/admin/content/committee`).
-  * Manajemen peserta Mojang Jajaka dengan kategori baku (JD, MD, JR, MR), prestasi, sosial media, galeri foto multi-role, dan QRIS voting (`/admin/content/participants`).
+  * Baseline peserta masih memakai stage tetap. Plan rework menggantinya dengan input pendaftar manual, stage linear dinamis, keputusan lolos, gelar multi-assignment, dan QRIS gambar eksternal (`/admin/content/participants`).
   * Rangkaian acara dan studio galeri terpadu dengan album standalone/event, video YouTube, dan live split preview (`/admin/content/events`, `/admin/content/galleries`).
   * Operasional voting terisolasi per edisi dengan rekap tally harian merchant QRIS dan switch visibilitas hasil (`/admin/voting`).
   * Dashboard utama dengan panel checklist kesiapan edisi (8 indikator kesiapan) dan pintas navigasi cepat (`/admin`).
@@ -216,6 +221,7 @@ All uploads go through **UploadThing** only. There is no R2, S3, or local-blob w
 ### Blockers
 
 - Plan 010 cutover (public runtime switch to live CMS data) is intentionally deferred until the operator authorizes it. Until then the hard-coded site stays live.
+- Plan 012 rework berjalan bertahap dan dikendalikan supervisor; checkpoint 1, 1b, 2A, 2B.1, 2B.2A, 2B.2B, 2B.3, CP2B.4 source implementation, CP1C.1, CP1C.2, CP1C.3A, CP1C.3B, CP1C.4, CP3, CP4, CP5, CP6, source CP7, source CP8A, source CP8B, source CP8C, source CP9, source CP10, dan source CP11 diterima. CP8A menambahkan skema additive serta backfill idempotent. CP8B menangani pendaftar manual serta stage linear dinamis. CP8C mengunci detail peserta ke edisi aktif, menjadikan stage hanya-baca, memakai QRIS gambar eksternal, serta menambahkan gelar per edisi dengan capacity dan assignment multi-gelar hanya bagi peserta tahap final. CP9 memisahkan pengelolaan acara dan album, mengunci owner ke edisi aktif, serta mewajibkan tepat satu sumber per item galeri. CP10 memakai stage voting dinamis, snapshot saat mulai manual, QRIS gambar siap pakai, tally terisolasi per edisi, serta dashboard dengan 10 indikator kesiapan. CP11 menghapus caller legacy dan merangkum overview Konten tanpa menghapus data kompatibilitas. Migrasi `0013` dan `0014` serta backfill belum diterapkan ke database operator mana pun. Browser dataset nonempty, runtime upload, true FormData, viewport admin 380 px, autosave artikel nyata, QA detail periode kepengurusan berisi data, runtime visual CP7, runtime visual CP8B, runtime visual CP8C, runtime visual CP9, runtime visual CP10, dan runtime QA CP11 tetap OPEN.
 
 ---
 

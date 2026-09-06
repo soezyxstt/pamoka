@@ -1,12 +1,21 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { AdminBadge, AdminCard, AdminEmptyState, AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
 import { database } from "@/server/db/client";
-import { categories, editions, participants, voteDailyTallies, votingCampaigns } from "@/server/db/schema";
+import {
+  categories,
+  editions,
+  mediaAssets,
+  participants,
+  selectionStages,
+  voteDailyTallies,
+  votingCampaignParticipants,
+  votingCampaigns,
+} from "@/server/db/schema";
 import { getAdminEditionContext } from "@/server/cms/context";
 
-import { VotingWorkspace } from "./voting-workspace";
+import { VotingConsole } from "./voting-console";
 
 export const metadata = { title: "Voting tahunan" };
 
@@ -19,7 +28,7 @@ export default async function VotingAdminPage() {
       <AdminPage
         eyebrow="Operasional / voting"
         title="Voting tahunan"
-        description="Kelola kampanye per edisi, QRIS finalis, dan pembaruan tally manual tanpa mencampur peserta antar tahun."
+        description="Kelola kampanye per edisi, QRIS peserta, dan pembaruan tally manual."
       >
         <AdminCard>
           <AdminEmptyState
@@ -32,7 +41,7 @@ export default async function VotingAdminPage() {
     );
   }
 
-  const [campaignRows, participantRows] = await Promise.all([
+  const [campaignRows, stageRows] = await Promise.all([
     database
       .select({
         id: votingCampaigns.id,
@@ -44,37 +53,60 @@ export default async function VotingAdminPage() {
         pricePerPoint: votingCampaigns.pricePerPoint,
         startsAt: votingCampaigns.startsAt,
         endsAt: votingCampaigns.endsAt,
+        eligibilityStageId: votingCampaigns.eligibilityStageId,
+        stageName: selectionStages.name,
+        resultVisibility: votingCampaigns.resultVisibility,
+        startedAt: votingCampaigns.startedAt,
+        closedAt: votingCampaigns.closedAt,
+        version: votingCampaigns.version,
       })
       .from(votingCampaigns)
       .innerJoin(editions, eq(votingCampaigns.editionId, editions.id))
+      .leftJoin(selectionStages, eq(selectionStages.id, votingCampaigns.eligibilityStageId))
       .where(eq(votingCampaigns.editionId, currentEdition.id))
       .orderBy(desc(votingCampaigns.startsAt)),
 
     database
       .select({
-        id: participants.id,
-        editionId: participants.editionId,
-        name: participants.name,
-        number: participants.number,
-        categoryCode: categories.code,
-        categoryLabel: categories.label,
-        qrisMediaId: participants.qrisMediaId,
+        id: selectionStages.id,
+        name: selectionStages.name,
+        displayOrder: selectionStages.displayOrder,
+        finalStage: selectionStages.finalStage,
+        lifecycle: selectionStages.lifecycle,
       })
-      .from(participants)
-      .innerJoin(categories, eq(participants.categoryId, categories.id))
-      .where(
-        and(
-          eq(participants.editionId, currentEdition.id),
-          eq(participants.stage, "finalis"),
-          eq(participants.active, true),
-        ),
-      )
-      .orderBy(categories.displayOrder, participants.displayOrder),
+      .from(selectionStages)
+      .where(eq(selectionStages.editionId, currentEdition.id))
+      .orderBy(asc(selectionStages.displayOrder), asc(selectionStages.id)),
   ]);
 
   const campaignIds = campaignRows.map((c) => c.id);
-  const tallyRows = campaignIds.length
-    ? await database
+  const [participantRows, tallyRows] = campaignIds.length
+    ? await Promise.all([
+        database
+          .select({
+            campaignId: votingCampaignParticipants.campaignId,
+            id: participants.id,
+            editionId: participants.editionId,
+            name: participants.name,
+            number: participants.number,
+            categoryCode: categories.code,
+            categoryLabel: categories.label,
+            qrisMediaId: participants.qrisMediaId,
+            qrisMimeType: mediaAssets.mimeType,
+            qrisLifecycle: mediaAssets.lifecycle,
+          })
+          .from(votingCampaignParticipants)
+          .innerJoin(participants, eq(participants.id, votingCampaignParticipants.participantId))
+          .innerJoin(categories, eq(participants.categoryId, categories.id))
+          .leftJoin(mediaAssets, eq(mediaAssets.id, participants.qrisMediaId))
+          .where(
+            and(
+              inArray(votingCampaignParticipants.campaignId, campaignIds),
+              eq(participants.editionId, currentEdition.id),
+            ),
+          )
+          .orderBy(categories.displayOrder, participants.displayOrder),
+        database
         .select({
           id: voteDailyTallies.id,
           campaignId: voteDailyTallies.campaignId,
@@ -86,26 +118,35 @@ export default async function VotingAdminPage() {
         })
         .from(voteDailyTallies)
         .where(inArray(voteDailyTallies.campaignId, campaignIds))
-        .orderBy(desc(voteDailyTallies.localDate))
-    : [];
+        .orderBy(desc(voteDailyTallies.localDate)),
+      ])
+    : [[], []];
 
   return (
     <AdminPage
       eyebrow="Operasional / voting"
       title={`Voting ${currentEdition.name}`}
-      description="Kelola kampanye, QRIS finalis, dan pembaruan tally manual untuk edisi yang dipilih di selector header."
+      description="Kelola kampanye, QRIS peserta, dan tally untuk edisi aktif."
       action={<AdminBadge value={currentEdition.lifecycle} />}
     >
-      <VotingWorkspace
+      <VotingConsole
+        key={`${currentEdition.id}:${campaignRows.map((campaign) => `${campaign.id}:${campaign.version}`).join(",")}:${tallyRows.map((tally) => `${tally.id}:${tally.version}`).join(",")}`}
         currentEdition={currentEdition}
         campaigns={campaignRows.map((campaign) => ({
           ...campaign,
           startsAt: campaign.startsAt.toISOString(),
           endsAt: campaign.endsAt.toISOString(),
+          startedAt: campaign.startedAt?.toISOString() ?? null,
+          closedAt: campaign.closedAt?.toISOString() ?? null,
         }))}
+        stages={stageRows}
         participants={participantRows.map((participant) => ({
           ...participant,
-          qrisReady: Boolean(participant.qrisMediaId),
+          qrisReady: Boolean(
+            participant.qrisMediaId &&
+              participant.qrisLifecycle === "ready" &&
+              participant.qrisMimeType?.startsWith("image/"),
+          ),
         }))}
         tallies={tallyRows.map((tally) => ({
           ...tally,

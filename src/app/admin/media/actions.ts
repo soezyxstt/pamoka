@@ -1,12 +1,13 @@
 "use server";
 
-import { and, desc, eq, isNull, like, or } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { appendAuditLog } from "@/server/auth/audit";
 import { requirePermission } from "@/server/auth/authorization";
 import { database } from "@/server/db/client";
 import { editions, mediaAssets, mediaFolders } from "@/server/db/schema";
+import { listMediaAssets, type ListMediaAssetsInput } from "@/server/media/queries";
 
 function normalizeFolderName(value: FormDataEntryValue | null) {
   const name = String(value ?? "").trim().replace(/\s+/g, " ");
@@ -167,70 +168,7 @@ export async function moveMediaAssetAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/media");
 }
 
-export async function getMediaAssetsAction(filters?: {
-  type?: "image" | "video" | "pdf" | "all";
-  folderId?: string | null | "all";
-  editionId?: string | null;
-  search?: string;
-  limit?: number;
-}) {
+export async function getMediaAssetsAction(filters?: ListMediaAssetsInput) {
   await requirePermission("media.view");
-
-  const conditions = [eq(mediaAssets.lifecycle, "ready")];
-
-  if (filters?.type && filters.type !== "all") {
-    if (filters.type === "image") {
-      conditions.push(like(mediaAssets.mimeType, "image/%"));
-    } else if (filters.type === "video") {
-      conditions.push(like(mediaAssets.mimeType, "video/%"));
-    } else if (filters.type === "pdf") {
-      conditions.push(eq(mediaAssets.mimeType, "application/pdf"));
-    }
-  }
-
-  if (filters?.folderId !== undefined && filters.folderId !== "all") {
-    if (filters.folderId === null) {
-      conditions.push(isNull(mediaAssets.folderId));
-    } else {
-      conditions.push(eq(mediaAssets.folderId, filters.folderId));
-    }
-  }
-
-  if (filters?.search) {
-    const query = `%${filters.search.trim()}%`;
-    conditions.push(or(like(mediaAssets.filename, query), like(mediaAssets.alt, query))!);
-  }
-
-  const queryLimit = filters?.limit && filters.limit > 0 && filters.limit <= 500 ? filters.limit : 300;
-
-  const [assets, folders, editionRows] = await Promise.all([
-    database
-      .select()
-      .from(mediaAssets)
-      .where(and(...conditions))
-      .orderBy(desc(mediaAssets.createdAt))
-      .limit(queryLimit),
-    database
-      .select()
-      .from(mediaFolders)
-      .orderBy(mediaFolders.name),
-    database
-      .select({ id: editions.id, year: editions.year, name: editions.name })
-      .from(editions)
-      .orderBy(desc(editions.year)),
-  ]);
-
-  return {
-    assets: assets.map((asset) => ({
-      ...asset,
-      createdAt: asset.createdAt.toISOString(),
-      updatedAt: asset.updatedAt ? asset.updatedAt.toISOString() : null,
-    })),
-    folders: folders.map((folder) => ({
-      ...folder,
-      createdAt: folder.createdAt.toISOString(),
-      updatedAt: folder.updatedAt ? folder.updatedAt.toISOString() : null,
-    })),
-    editions: editionRows,
-  };
+  return listMediaAssets(database, filters);
 }

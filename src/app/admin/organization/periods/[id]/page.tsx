@@ -14,6 +14,7 @@ import {
 } from "@/server/db/schema";
 import {
   PeriodDetailClient,
+  type AvailableEdition,
   type ConnectedEdition,
   type DetailMember,
   type DetailPeriod,
@@ -30,8 +31,7 @@ type PageProps = {
 export default async function PeriodDetailPage({ params }: PageProps) {
   const { id } = await params;
   const { effectivePermissions } = await requirePermission("content.view");
-  const canEdit = effectivePermissions.has("people.manage") || effectivePermissions.has("content.edit");
-  const canPublish = effectivePermissions.has("content.publish");
+  const canEdit = effectivePermissions.has("people.manage");
 
   // Fetch target period
   const [periodRow] = await database
@@ -108,7 +108,7 @@ export default async function PeriodDetailPage({ params }: PageProps) {
     portraitUrl: m.portraitUrl,
   }));
 
-  // Fetch connected editions
+  // Fetch every edition so reassignment is visible before saving.
   const editionRows = await database
     .select({
       id: editions.id,
@@ -116,18 +116,25 @@ export default async function PeriodDetailPage({ params }: PageProps) {
       name: editions.name,
       slug: editions.slug,
       lifecycle: editions.lifecycle,
+      organizationPeriodId: editions.organizationPeriodId,
+      organizationPeriodLabel: organizationPeriods.label,
     })
     .from(editions)
-    .where(eq(editions.organizationPeriodId, id))
+    .leftJoin(organizationPeriods, eq(editions.organizationPeriodId, organizationPeriods.id))
     .orderBy(asc(editions.year));
 
-  const connectedEditions: ConnectedEdition[] = editionRows.map((e) => ({
+  const availableEditions: AvailableEdition[] = editionRows.map((e) => ({
     id: e.id,
     year: e.year,
     name: e.name,
     slug: e.slug,
     lifecycle: e.lifecycle,
+    organizationPeriodId: e.organizationPeriodId,
+    organizationPeriodLabel: e.organizationPeriodLabel,
   }));
+  const connectedEditions: ConnectedEdition[] = availableEditions.filter(
+    (edition) => edition.organizationPeriodId === id
+  );
 
   // Fetch people options for assignments
   const peopleRaw = await database
@@ -152,16 +159,16 @@ export default async function PeriodDetailPage({ params }: PageProps) {
     <AdminPage
       eyebrow="Kepengurusan / detail periode"
       title={period.label}
-      description={`Kelola pohon struktur unit hingga 4 level dan penugasan pengurus untuk masa bakti ${period.startYear} - ${period.endYear}.`}
+      description="Pohon unit dan penugasan pengurus."
     >
       <PeriodDetailClient
         period={period}
         units={units}
         members={members}
         connectedEditions={connectedEditions}
+        availableEditions={availableEditions}
         peopleOptions={peopleOptions}
         canEdit={canEdit}
-        canPublish={canPublish}
       />
     </AdminPage>
   );

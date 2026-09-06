@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 
-import { AdminBadge, AdminCard, AdminCardHeader, AdminEmptyState, AdminPage } from "@/components/admin/primitives";
+import { AdminCard, AdminEmptyState, AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
 import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
@@ -19,13 +19,13 @@ export default async function EditionSettingsPage() {
       <AdminPage
         eyebrow="Konten / identitas"
         title="Identitas edisi"
-        description="Kelola logo, slogan, dan program unggulan untuk edisi yang sedang aktif."
+        description="Logo, slogan, dan program unggulan."
       >
         <AdminCard>
           <AdminEmptyState
-            icon="sparkles"
+            icon="award"
             title="Belum ada edisi dipilih"
-            description="Silakan buat atau pilih edisi pada selector di header untuk mengelola identitas dan program edisi."
+            description="Pilih edisi pada selector di header untuk mulai."
           />
         </AdminCard>
       </AdminPage>
@@ -43,11 +43,11 @@ export default async function EditionSettingsPage() {
       <AdminPage
         eyebrow="Konten / identitas"
         title="Identitas edisi"
-        description="Kelola logo, slogan, dan program unggulan untuk edisi yang sedang aktif."
+        description="Logo, slogan, dan program unggulan."
       >
         <AdminCard>
           <AdminEmptyState
-            icon="sparkles"
+            icon="award"
             title="Edisi tidak ditemukan"
             description="Data edisi yang dipilih tidak ditemukan dalam database."
           />
@@ -89,19 +89,10 @@ export default async function EditionSettingsPage() {
     <AdminPage
       eyebrow="Konten / identitas"
       title="Identitas edisi"
-      description="Kelola logo, slogan, dan program unggulan untuk edisi yang sedang aktif."
+      description="Logo, slogan, dan program unggulan."
     >
-      <div className="space-y-6">
-        <AdminCard>
-          <AdminCardHeader
-            eyebrow="Konteks edisi terpilih"
-            title={`${editionRow.name} (${editionRow.year})`}
-            description="Perubahan logo, slogan, dan program kerja di halaman ini khusus terikat pada edisi ini."
-            action={<AdminBadge value={editionRow.lifecycle} />}
-          />
-        </AdminCard>
-
-        <EditionSettingsClient
+      <EditionSettingsClient
+        key={`${editionRow.id}:${editionRow.version}:${programs.map((program) => `${program.id}:${program.updatedAt.getTime()}`).join(",")}`}
           edition={{
             id: editionRow.id,
             year: editionRow.year,
@@ -114,8 +105,7 @@ export default async function EditionSettingsPage() {
           initialLogoAsset={logoAsset}
           initialPrograms={programs}
           canManageContent={canManageContent}
-        />
-      </div>
+      />
     </AdminPage>
   );
 }

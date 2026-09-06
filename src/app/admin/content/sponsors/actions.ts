@@ -9,8 +9,7 @@ import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
 import { mediaAssets, sponsors } from "@/server/db/schema";
 
-export const SPONSOR_TIERS = ["utama", "pendukung", "pendamping", "pelengkap"] as const;
-export type SponsorTier = (typeof SPONSOR_TIERS)[number];
+import { SPONSOR_TIERS, type SponsorTier } from "./constants";
 
 function validateWebsiteUrl(urlStr: string | null | undefined): string | null {
   if (!urlStr) return null;
@@ -19,7 +18,7 @@ function validateWebsiteUrl(urlStr: string | null | undefined): string | null {
 
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (parsed.protocol !== "https:") {
       throw new Error();
     }
     return trimmed;
@@ -40,7 +39,6 @@ export async function createSponsorAction(formData: FormData) {
   const websiteRaw = formData.get("website")?.toString().trim();
   const logoMediaIdRaw = formData.get("logoMediaId")?.toString().trim();
   const displayOrderRaw = formData.get("displayOrder");
-  const activeRaw = formData.get("active");
 
   if (!name) {
     throw new Error("Nama sponsor wajib diisi");
@@ -55,11 +53,8 @@ export async function createSponsorAction(formData: FormData) {
     ? Math.max(0, Number(displayOrderRaw))
     : 0;
 
-  const canPublish = actor.effectivePermissions.has("content.publish");
-  let active = false;
-  if (canPublish) {
-    active = activeRaw === "true" || activeRaw === "on" || activeRaw === "1";
-  }
+  // Sponsor baru selalu menunggu penerbitan terpisah dari pengguna berizin.
+  const active = false;
 
   const logoMediaId = logoMediaIdRaw && logoMediaIdRaw.length > 0 ? logoMediaIdRaw : null;
   if (logoMediaId) {
@@ -140,7 +135,6 @@ export async function updateSponsorAction(formData: FormData) {
   const websiteRaw = formData.get("website")?.toString().trim();
   const logoMediaIdRaw = formData.get("logoMediaId")?.toString().trim();
   const displayOrderRaw = formData.get("displayOrder");
-  const activeRaw = formData.get("active");
 
   if (!id) {
     throw new Error("ID sponsor wajib disertakan");
@@ -187,7 +181,9 @@ export async function updateSponsorAction(formData: FormData) {
       throw new Error("Versi data telah diperbarui oleh pengguna lain. Silakan muat ulang halaman.");
     }
 
-    const desiredActive = activeRaw === "true" || activeRaw === "on" || activeRaw === "1";
+    const desiredActive = formData.has("active")
+      ? ["true", "on", "1"].includes(String(formData.get("active")))
+      : current.active;
     const canPublish = actor.effectivePermissions.has("content.publish");
     let active = current.active;
     if (desiredActive !== current.active) {

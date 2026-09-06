@@ -4,7 +4,7 @@ import { TableHeader, TableRow, TableHead, TableBody, TableCell, Table } from '@
 import { categoryValues, type Category, type FinalistWithIncome } from '@/server/db/schema';
 import InputForm from './input-form';
 import { useState } from 'react';
-import { AdminEmptyState, adminInputClassName } from '@/components/admin/primitives';
+import { AdminEmptyState, AdminSelect } from '@/components/admin/primitives';
 
 type DateLike = Date | string | number;
 
@@ -44,15 +44,26 @@ export default function AdminClient({ categories }: {
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1.5 text-xs font-semibold text-slate-600">
             Kategori
-            <select value={catt} onChange={(event) => setCatt(event.target.value as Category)} className={adminInputClassName}>
-              {categoryValues.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+            <AdminSelect
+              aria-label="Filter kategori vote"
+              value={catt}
+              onValueChange={(value) => setCatt(value as Category)}
+              className="h-10 w-full"
+              options={categoryValues.map((value) => ({ value, label: value }))}
+            />
           </label>
           <label className="space-y-1.5 text-xs font-semibold text-slate-600">
             Tanggal
-            <select value={todayIndex >= 0 ? dates.findIndex((item) => item.getTime() === date.getTime()).toString() : '0'} onChange={(event) => setDate(dates[parseInt(event.target.value, 10)])} className={adminInputClassName}>
-              {dates.map((dateOption, index) => <option key={dateOption.toISOString()} value={index}>{dateOption.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' })}</option>)}
-            </select>
+            <AdminSelect
+              aria-label="Filter tanggal vote"
+              value={todayIndex >= 0 ? dates.findIndex((item) => item.getTime() === date.getTime()).toString() : '0'}
+              onValueChange={(value) => setDate(dates[parseInt(value, 10)])}
+              className="h-10 w-full"
+              options={dates.map((dateOption, index) => ({
+                value: index.toString(),
+                label: dateOption.toLocaleDateString('id-ID', { day: '2-digit', month: 'long' }),
+              }))}
+            />
           </label>
         </div>
       </div>

@@ -24,6 +24,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AdminBadge,
   AdminCard,
@@ -45,8 +46,10 @@ import {
   type ParticipantMediaItem,
   type ParticipantSocialLinkItem,
 } from "../actions";
-import type { CategoryOption, EditionInfo } from "../participants-list-client";
 import type { ParticipantMediaRole, SocialPlatform } from "@/server/db/schema";
+
+export type CategoryOption = { id: string; code: string; label: string };
+type EditionInfo = { id: string; year: number; name: string; lifecycle: string };
 
 export type MediaAssetDetail = {
   id: string;
@@ -67,18 +70,20 @@ export type ParticipantDetail = {
   number: number;
   name: string;
   slug: string;
-  stage: string;
+  currentStageId: string | null;
+  currentStageName: string | null;
+  selectionStatus: "registered" | "active" | "eliminated" | "completed";
   bio: string | null;
   portraitMediaId: string | null;
   portraitAsset: MediaAssetDetail | null;
   qrisMediaId: string | null;
   qrisAsset: MediaAssetDetail | null;
-  paymentUrl: string | null;
   displayOrder: number;
   active: boolean;
   version: number;
   achievements: { id: string; text: string; displayOrder: number }[];
   socialLinks: { id: string; platform: SocialPlatform; label: string | null; url: string; displayOrder: number }[];
+  titles: { id: string; name: string }[];
   media: {
     id: string;
     role: ParticipantMediaRole;
@@ -133,7 +138,6 @@ export function ParticipantDetailWorkspace({
   const [slug, setSlug] = useState(participant.slug);
   const [number, setNumber] = useState(participant.number);
   const [categoryId, setCategoryId] = useState(participant.categoryId);
-  const [stage, setStage] = useState(participant.stage);
   const [displayOrder, setDisplayOrder] = useState(participant.displayOrder);
   const [active, setActive] = useState(participant.active);
   const [bio, setBio] = useState(participant.bio ?? "");
@@ -178,7 +182,6 @@ export function ParticipantDetailWorkspace({
 
   // 5. QRIS State
   const [qrisAsset, setQrisAsset] = useState<MediaAssetDetail | null>(participant.qrisAsset);
-  const [paymentUrl, setPaymentUrl] = useState(participant.paymentUrl ?? "");
   const [qrisReason, setQrisReason] = useState("");
 
   // Auto-slug generator
@@ -220,7 +223,6 @@ export function ParticipantDetailWorkspace({
           name: name.trim(),
           slug: slug.trim() || undefined,
           number: Number(number),
-          stage,
           bio: bio.trim() || null,
           displayOrder: Number(displayOrder),
           active,
@@ -236,7 +238,6 @@ export function ParticipantDetailWorkspace({
           categoryId,
           categoryCode: selectedCat?.code ?? prev.categoryCode,
           categoryLabel: selectedCat?.label ?? prev.categoryLabel,
-          stage,
           bio: bio.trim() || null,
           displayOrder: Number(displayOrder),
           active,
@@ -289,6 +290,7 @@ export function ParticipantDetailWorkspace({
         const res = await saveParticipantAchievementsAction(
           participant.id,
           achievements,
+          participant.version,
           achievementsReason.trim() || undefined
         );
         setParticipant((prev) => ({
@@ -342,6 +344,7 @@ export function ParticipantDetailWorkspace({
         const res = await saveParticipantSocialLinksAction(
           participant.id,
           socialLinks,
+          participant.version,
           socialReason.trim() || undefined
         );
         setParticipant((prev) => ({
@@ -431,6 +434,7 @@ export function ParticipantDetailWorkspace({
         const res = await saveParticipantMediaAction(
           participant.id,
           payload,
+          participant.version,
           mediaReason.trim() || undefined
         );
 
@@ -467,8 +471,8 @@ export function ParticipantDetailWorkspace({
 
     const formData = new FormData();
     formData.set("participantId", participant.id);
+    formData.set("expectedVersion", String(participant.version));
     if (qrisAsset) formData.set("qrisMediaId", qrisAsset.id);
-    if (paymentUrl) formData.set("paymentUrl", paymentUrl.trim());
     formData.set("reason", qrisReason.trim());
 
     startTransition(async () => {
@@ -478,11 +482,10 @@ export function ParticipantDetailWorkspace({
           ...prev,
           qrisMediaId: qrisAsset?.id ?? null,
           qrisAsset,
-          paymentUrl: paymentUrl.trim() || null,
           version: res.version,
         }));
         setQrisReason("");
-        toast.success("QRIS dan URL pembayaran berhasil diperbarui");
+        toast.success("QRIS berhasil diperbarui");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gagal memperbarui QRIS");
       }
@@ -519,7 +522,7 @@ export function ParticipantDetailWorkspace({
           <span className="rounded-md border border-dgb-200 bg-dgb-50 px-2.5 py-1 font-mono text-xs font-semibold text-dgb-900">
             v{participant.version}
           </span>
-          <AdminBadge value={participant.stage} />
+          <AdminBadge value={participant.currentStageName ?? "Tahap belum terhubung"} />
           <span
             className={`rounded-md border px-2.5 py-1 text-xs font-semibold ${
               participant.active
@@ -538,8 +541,10 @@ export function ParticipantDetailWorkspace({
         <div className="space-y-6 lg:col-span-7 xl:col-span-8">
           {/* Tab Navigation */}
           <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-muted/40 p-1">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveTab("identity")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 font-montserrat text-xs font-semibold transition-all ${
                 activeTab === "identity"
@@ -548,9 +553,11 @@ export function ParticipantDetailWorkspace({
               }`}
             >
               <User size={14} /> Identitas
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveTab("achievements")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 font-montserrat text-xs font-semibold transition-all ${
                 activeTab === "achievements"
@@ -559,9 +566,11 @@ export function ParticipantDetailWorkspace({
               }`}
             >
               <Award size={14} /> Prestasi ({achievements.length})
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveTab("social")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 font-montserrat text-xs font-semibold transition-all ${
                 activeTab === "social"
@@ -570,9 +579,11 @@ export function ParticipantDetailWorkspace({
               }`}
             >
               <Share2 size={14} /> Sosial Media ({socialLinks.length})
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveTab("media")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 font-montserrat text-xs font-semibold transition-all ${
                 activeTab === "media"
@@ -581,9 +592,11 @@ export function ParticipantDetailWorkspace({
               }`}
             >
               <Camera size={14} /> Galeri Foto ({mediaItems.length})
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveTab("qris")}
               className={`flex items-center gap-1.5 rounded-md px-3 py-2 font-montserrat text-xs font-semibold transition-all ${
                 activeTab === "qris"
@@ -591,13 +604,13 @@ export function ParticipantDetailWorkspace({
                   : "text-muted-foreground hover:bg-white/50 hover:text-foreground"
               }`}
             >
-              <QrCode size={14} /> Pembayaran & Voting
-            </button>
+              <QrCode size={14} /> QRIS
+            </Button>
           </div>
 
           {/* TAB 1: IDENTITAS */}
           {activeTab === "identity" ? (
-            <AdminCard className="p-6">
+            <AdminCard className="p-6 sm:p-6">
               <AdminCardHeader
                 eyebrow="Identitas Peserta"
                 title="Informasi Dasar & Biodata"
@@ -608,15 +621,10 @@ export function ParticipantDetailWorkspace({
                   <AdminField label="Kategori" className="sm:col-span-2">
                     <AdminSelect
                       value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
+                      onValueChange={setCategoryId}
                       required
-                    >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label} ({c.code})
-                        </option>
-                      ))}
-                    </AdminSelect>
+                      options={categories.map((c) => ({ value: c.id, label: `${c.label} (${c.code})` }))}
+                    />
                   </AdminField>
 
                   <AdminField label="Nama lengkap" className="sm:col-span-2">
@@ -646,18 +654,10 @@ export function ParticipantDetailWorkspace({
                   </AdminField>
 
                   <AdminField label="Tahap seleksi">
-                    <AdminSelect
-                      value={stage}
-                      onChange={(e) => setStage(e.target.value)}
-                      required
-                    >
-                      <option value="finalis">Finalis</option>
-                      <option value="semifinalis">Semifinalis</option>
-                      <option value="audisi">Audisi</option>
-                    </AdminSelect>
+                    <AdminInput value={participant.currentStageName ?? "Belum terhubung"} readOnly disabled />
                   </AdminField>
 
-                  <AdminField label="Urutan penampilan (displayOrder)">
+                  <AdminField label="Urutan penampilan">
                     <AdminInput
                       type="number"
                       value={displayOrder}
@@ -666,12 +666,10 @@ export function ParticipantDetailWorkspace({
                   </AdminField>
 
                   <div className="flex items-center gap-3 rounded-lg border border-border p-3 sm:col-span-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       id="participant-active-toggle"
                       checked={active}
-                      onChange={(e) => setActive(e.target.checked)}
-                      className="size-4 rounded accent-dgb"
+                      onCheckedChange={(checked) => setActive(checked === true)}
                     />
                     <label htmlFor="participant-active-toggle" className="cursor-pointer text-xs">
                       <span className="font-semibold text-foreground">Status Aktif</span>
@@ -715,7 +713,7 @@ export function ParticipantDetailWorkspace({
 
           {/* TAB 2: PRESTASI */}
           {activeTab === "achievements" ? (
-            <AdminCard className="p-6">
+            <AdminCard className="p-6 sm:p-6">
               <AdminCardHeader
                 eyebrow="Prestasi & Penghargaan"
                 title={`Daftar Prestasi (${achievements.length})`}
@@ -833,7 +831,7 @@ export function ParticipantDetailWorkspace({
 
           {/* TAB 3: SOSIAL MEDIA */}
           {activeTab === "social" ? (
-            <AdminCard className="p-6">
+            <AdminCard className="p-6 sm:p-6">
               <AdminCardHeader
                 eyebrow="Tautan Sosial Media"
                 title={`Akun Sosial Media (${socialLinks.length})`}
@@ -869,20 +867,15 @@ export function ParticipantDetailWorkspace({
                         <div className="sm:col-span-3">
                           <AdminSelect
                             value={item.platform}
-                            onChange={(e) => {
-                              const platform = e.target.value as SocialPlatform;
+                            onValueChange={(nextPlatform) => {
+                              const platform = nextPlatform as SocialPlatform;
                               setSocialLinks((prev) =>
                                 prev.map((s, i) => (i === index ? { ...s, platform } : s))
                               );
                             }}
                             className="h-8 text-xs"
-                          >
-                            {SOCIAL_PLATFORMS.map((p) => (
-                              <option key={p.value} value={p.value}>
-                                {p.label}
-                              </option>
-                            ))}
-                          </AdminSelect>
+                            options={SOCIAL_PLATFORMS.map((p) => ({ value: p.value, label: p.label }))}
+                          />
                         </div>
 
                         {item.platform === "other" ? (
@@ -978,7 +971,7 @@ export function ParticipantDetailWorkspace({
 
           {/* TAB 4: GALERI MEDIA PESERTA */}
           {activeTab === "media" ? (
-            <AdminCard className="p-6">
+            <AdminCard className="p-6 sm:p-6">
               <AdminCardHeader
                 eyebrow="Galeri Media"
                 title={`Foto & Dokumentasi (${mediaItems.length})`}
@@ -991,15 +984,10 @@ export function ParticipantDetailWorkspace({
                     <span className="text-xs font-semibold text-dgb-900">Pilih role:</span>
                     <AdminSelect
                       value={targetRoleForNewMedia}
-                      onChange={(e) => setTargetRoleForNewMedia(e.target.value as ParticipantMediaRole)}
+                      onValueChange={(nextRole) => setTargetRoleForNewMedia(nextRole as ParticipantMediaRole)}
                       className="h-8 text-xs w-36 bg-white"
-                    >
-                      {MEDIA_ROLES.map((r) => (
-                        <option key={r.value} value={r.value}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </AdminSelect>
+                      options={MEDIA_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+                    />
                   </div>
 
                   <Button
@@ -1056,20 +1044,15 @@ export function ParticipantDetailWorkspace({
                               <div className="flex flex-wrap items-center gap-2">
                                 <AdminSelect
                                   value={item.role}
-                                  onChange={(e) => {
-                                    const role = e.target.value as ParticipantMediaRole;
+                                  onValueChange={(nextRole) => {
+                                    const role = nextRole as ParticipantMediaRole;
                                     setMediaItems((prev) =>
                                       prev.map((m, i) => (i === index ? { ...m, role } : m))
                                     );
                                   }}
                                   className="h-7 text-[11px] font-semibold w-32"
-                                >
-                                  {MEDIA_ROLES.map((r) => (
-                                    <option key={r.value} value={r.value}>
-                                      {r.label}
-                                    </option>
-                                  ))}
-                                </AdminSelect>
+                                  options={MEDIA_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+                                />
 
                                 <span className="truncate text-xs font-semibold text-dgb-900 max-w-44" title={asset?.filename}>
                                   {asset?.filename ?? item.mediaId}
@@ -1144,19 +1127,19 @@ export function ParticipantDetailWorkspace({
             </AdminCard>
           ) : null}
 
-          {/* TAB 5: PEMBAYARAN & VOTING */}
+          {/* TAB 5: QRIS */}
           {activeTab === "qris" ? (
-            <AdminCard className="p-6">
+            <AdminCard className="p-6 sm:p-6">
               <AdminCardHeader
-                eyebrow="Pembayaran & Voting"
-                title="QRIS & Pembayaran Kampanye"
-                description="Tetapkan gambar barcode QRIS dan tautan pembayaran untuk penerimaan vote peserta."
+                eyebrow="Voting"
+                title="Gambar QRIS"
+                description="Unggah atau pilih gambar QRIS yang dibuat di luar website."
               />
               <form onSubmit={handleSaveQris} className="space-y-4 pt-2">
                 <AdminMediaField
                   name="qrisMediaId"
                   label="Gambar QRIS Peserta"
-                  hint="Gambar barcode QRIS untuk voting. Wajib berformat gambar dengan rasio 1:1."
+                  hint="Gunakan gambar siap pakai dari pustaka media."
                   aspectRatioHint="1:1"
                   initialAsset={
                     qrisAsset
@@ -1192,18 +1175,6 @@ export function ParticipantDetailWorkspace({
                   canManageMedia={canManageMedia}
                   activeEditionId={edition.id}
                 />
-
-                <AdminField
-                  label="URL Pembayaran alternatif"
-                  hint="Opsional jika transaksi pembayaran juga dilayani melalui gateway website."
-                >
-                  <AdminInput
-                    type="url"
-                    placeholder="https://..."
-                    value={paymentUrl}
-                    onChange={(e) => setPaymentUrl(e.target.value)}
-                  />
-                </AdminField>
 
                 <AdminField label="Alasan perubahan QRIS">
                   <AdminInput
@@ -1274,7 +1245,7 @@ export function ParticipantDetailWorkspace({
                     {name || "Nama Peserta"}
                   </p>
                   <p className="mt-0.5 text-xs text-white/80">
-                    {edition.name} · {stage}
+                    {edition.name} · {participant.currentStageName ?? "Tahap belum terhubung"}
                   </p>
                 </div>
               </div>
@@ -1315,6 +1286,15 @@ export function ParticipantDetailWorkspace({
                   </div>
                 ) : null}
 
+                {participant.titles.length > 0 ? (
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Gelar</span>
+                    <p className="mt-0.5 text-xs font-semibold text-dgb-900">
+                      {participant.titles.map((title) => title.name).join(", ")}
+                    </p>
+                  </div>
+                ) : null}
+
                 {/* Social Icons */}
                 {socialLinks.length > 0 ? (
                   <div>
@@ -1344,22 +1324,12 @@ export function ParticipantDetailWorkspace({
                       {qrisAsset ? "QRIS Terpasang" : "QRIS Belum Ada"}
                     </span>
                   </div>
-                  {paymentUrl ? (
-                    <a
-                      href={paymentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[11px] text-dgb hover:underline"
-                    >
-                      Buka URL
-                    </a>
-                  ) : null}
                 </div>
               </div>
             </div>
 
             {/* Profile Checklist */}
-            <AdminCard className="p-4 space-y-2">
+            <AdminCard className="space-y-2 p-4 sm:p-4">
               <h4 className="font-montserrat text-xs font-bold text-dgb-900">Kelengkapan Profil</h4>
               <ul className="space-y-1.5 text-xs">
                 <li className="flex items-center justify-between">

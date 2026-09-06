@@ -4,7 +4,6 @@ import {
   ArrowUpRight,
   Check,
   FileIcon,
-  FileImage,
   FileText,
   Folder,
   FolderOpen,
@@ -13,12 +12,10 @@ import {
   List,
   Search,
   Trash2,
-  UploadCloud,
   Video,
-  X,
 } from "lucide-react";
 import Image from "next/image";
-import { type ChangeEvent, type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -40,9 +37,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useUploadThing } from "@/lib/uploadthing";
-import { cn } from "@/lib/utils";
 import { getMediaAssetsAction } from "@/app/admin/media/actions";
+import { adminNativeScrollbarClassName } from "@/components/admin/admin-scroll-area";
+import { AdminMediaUploader } from "@/components/admin/media-uploader";
+import { cn } from "@/lib/utils";
+import type { UploadedMediaIdentity } from "@/server/media/upload-validation";
 
 export type MediaAssetSummary = {
   id: string;
@@ -54,6 +53,8 @@ export type MediaAssetSummary = {
   decorative: boolean;
   lifecycle: string;
   folderId: string | null;
+  provider?: string;
+  providerKey?: string | null;
   createdAt?: string;
   updatedAt?: string | null;
 };
@@ -172,11 +173,9 @@ export function AdminMediaPreview({
   );
 }
 
-export type AdminMediaPickerProps = {
+type AdminMediaPickerCommonProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (asset: MediaAssetSummary) => void;
-  selectedAssetId?: string | null;
   acceptType?: "image" | "video" | "pdf" | "all";
   title?: string;
   description?: string;
@@ -184,86 +183,223 @@ export type AdminMediaPickerProps = {
   initialAssets?: MediaAssetSummary[];
   initialFolders?: MediaFolderSummary[];
   activeEditionId?: string | null;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 };
+
+export type AdminMediaPickerProps = AdminMediaPickerCommonProps & {
+  multiple?: boolean;
+  mode?: "single" | "multiple";
+  onSelect?: (asset: MediaAssetSummary) => void;
+  selectedAssetId?: string | null;
+  selectedAssetIds?: string[];
+  initialSelectedAssetIds?: string[];
+  onSelectMany?: (assets: MediaAssetSummary[]) => void;
+};
+
+function normalizeAssetIds(assetIds: readonly string[] | undefined) {
+  return [...new Set((assetIds ?? []).filter((assetId) => assetId.trim().length > 0))];
+}
 
 export function AdminMediaPicker({
   open,
   onOpenChange,
+  multiple,
+  mode = "single",
   onSelect,
   selectedAssetId,
+  selectedAssetIds,
+  initialSelectedAssetIds,
+  onSelectMany,
   acceptType = "all",
   title = "Pilih media",
   description = "Pilih aset dari pustaka atau unggah file baru.",
-  canManageMedia = true,
+  canManageMedia = false,
   initialAssets = [],
   initialFolders = [],
   activeEditionId = null,
+  returnFocusRef,
 }: AdminMediaPickerProps) {
+  const isMultiple = multiple ?? mode === "multiple";
+  const initialSelectionIds = normalizeAssetIds(selectedAssetIds ?? initialSelectedAssetIds);
   const [assets, setAssets] = useState<MediaAssetSummary[]>(initialAssets);
+  const [assetCache, setAssetCache] = useState<Record<string, MediaAssetSummary>>(() =>
+    Object.fromEntries(initialAssets.map((asset) => [asset.id, asset]))
+  );
   const [folders, setFolders] = useState<MediaFolderSummary[]>(initialFolders);
   const [editions, setEditions] = useState<EditionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<string | null | "all">("all");
-  const [selectedFolderScope, setSelectedFolderScope] = useState<"all" | "edition" | "global">("all");
+  const [selectedFolderScope, setSelectedFolderScope] = useState<"all" | "edition" | "global">(() =>
+    activeEditionId && initialFolders.some((folder) => folder.editionId === activeEditionId) ? "edition" : "all"
+  );
   const [typeFilter, setTypeFilter] = useState<"image" | "video" | "pdf" | "all">(acceptType);
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [selectedId, setSelectedId] = useState<string | null>(selectedAssetId ?? null);
-  const [filesToUpload, setFilesToUpload] = useState<File[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    isMultiple ? initialSelectionIds.at(-1) ?? null : selectedAssetId ?? null
+  );
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => (isMultiple ? initialSelectionIds : []));
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [previousFilterKey, setPreviousFilterKey] = useState("");
+  const [previousOpen, setPreviousOpen] = useState(open);
+  const selectedIdRef = useRef(selectedId);
+  const selectedIdsRef = useRef(selectedIds);
+  const previousSelectionKeyRef = useRef(initialSelectionIds.join("|"));
+  const requestKeyRef = useRef(0);
+  const folderScopeTouchedRef = useRef(false);
+  const editionScopeDefaultedRef = useRef(
+    Boolean(activeEditionId && initialFolders.some((folder) => folder.editionId === activeEditionId))
+  );
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
-  const activeUploadEndpoint = typeFilter === "video" ? "video" : typeFilter === "pdf" ? "pdf" : "image";
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
 
-  const { startUpload, isUploading } = useUploadThing(activeUploadEndpoint, {
-    onClientUploadComplete: (res) => {
-      setFilesToUpload([]);
-      toast.success("Media berhasil diunggah");
-      loadData().then((fetched) => {
-        if (res && res[0] && fetched) {
-          const matching = fetched.find((a) => a.url === res[0]?.url || a.filename === res[0]?.name);
-          if (matching) {
-            setSelectedId(matching.id);
-          }
-        }
-      });
-    },
-    onUploadError: (error) => {
-      toast.error(error.message || "Upload media gagal");
-    },
-  });
+  useEffect(() => {
+    if (!isMultiple) return;
+    const selectionKey = initialSelectionIds.join("|");
+    if (selectionKey === previousSelectionKeyRef.current) return;
+    previousSelectionKeyRef.current = selectionKey;
+    setSelectedIds(initialSelectionIds);
+    selectedIdsRef.current = initialSelectionIds;
+    setSelectedId(initialSelectionIds.at(-1) ?? null);
+  }, [initialSelectionIds, isMultiple]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (assetIds: readonly string[] = []) => {
+    const requestKey = requestKeyRef.current + 1;
+    requestKeyRef.current = requestKey;
     setIsLoading(true);
     try {
       const res = await getMediaAssetsAction({
         type: typeFilter,
         folderId: currentFolderId === "all" ? "all" : currentFolderId,
+        folderScope: selectedFolderScope,
+        editionId: activeEditionId,
         search: query.trim() || undefined,
+        page,
+        limit: pageSize,
+        assetIds:
+          assetIds.length > 0
+            ? assetIds
+            : isMultiple
+              ? selectedIdsRef.current
+              : selectedIdRef.current
+                ? [selectedIdRef.current]
+                : [],
       });
+      if (requestKey !== requestKeyRef.current) return null;
       setAssets(res.assets);
+      setAssetCache((current) => ({
+        ...current,
+        ...Object.fromEntries([...res.assets, ...res.selectedAssets].map((asset) => [asset.id, asset])),
+      }));
       setFolders(res.folders);
       setEditions(res.editions);
-      return res.assets;
+      setPage(res.page);
+      setPageSize(res.limit);
+      setTotal(res.total);
+      setHasMore(res.hasMore);
+
+      if (
+        !folderScopeTouchedRef.current &&
+        !editionScopeDefaultedRef.current &&
+        selectedFolderScope === "all" &&
+        activeEditionId &&
+        res.folders.some((folder) => folder.editionId === activeEditionId)
+      ) {
+        editionScopeDefaultedRef.current = true;
+        setSelectedFolderScope("edition");
+      }
+      return res;
     } catch {
-      toast.error("Gagal memuat pustaka media");
-      return [];
+      if (requestKey === requestKeyRef.current) toast.error("Gagal memuat pustaka media");
+      return null;
     } finally {
-      setIsLoading(false);
+      if (requestKey === requestKeyRef.current) setIsLoading(false);
     }
-  }, [typeFilter, currentFolderId, query]);
+  }, [activeEditionId, currentFolderId, isMultiple, page, pageSize, query, selectedFolderScope, typeFilter]);
+
+  const handleUploaded = useCallback(async (identities: UploadedMediaIdentity[]) => {
+    const uploadedIds = normalizeAssetIds(identities.map((identity) => identity.mediaAssetId));
+    const res = await loadData(uploadedIds);
+    if (uploadedIds.length === 0) return;
+
+    const uploadedAssets = uploadedIds.flatMap((uploadedId) => {
+      const asset = res?.selectedAssets.find((candidate) => candidate.id === uploadedId);
+      return asset ? [asset] : [];
+    });
+
+    if (isMultiple) {
+      setSelectedIds((current) => {
+        const next = [...current];
+        for (const asset of uploadedAssets) {
+          if (!next.includes(asset.id)) next.push(asset.id);
+        }
+        selectedIdsRef.current = next;
+        return next;
+      });
+      if (uploadedAssets.length > 0) setSelectedId(uploadedAssets[uploadedAssets.length - 1]!.id);
+      return;
+    }
+
+    const uploadedAsset = uploadedAssets[0];
+    if (uploadedAsset) setSelectedId(uploadedAsset.id);
+  }, [isMultiple, loadData]);
 
   const [prevSelectedAssetId, setPrevSelectedAssetId] = useState(selectedAssetId);
   if (selectedAssetId !== prevSelectedAssetId) {
     setPrevSelectedAssetId(selectedAssetId);
-    setSelectedId(selectedAssetId ?? null);
+    if (!isMultiple) setSelectedId(selectedAssetId ?? null);
+  }
+
+  const filterKey = [
+    typeFilter,
+    currentFolderId ?? "root",
+    selectedFolderScope,
+    activeEditionId ?? "",
+    query,
+  ].join("|");
+  if (filterKey !== previousFilterKey) {
+    setPreviousFilterKey(filterKey);
+    setPage(0);
+  }
+
+  if (open !== previousOpen) {
+    setPreviousOpen(open);
+    if (open) {
+      if (isMultiple) {
+        const nextSelection = normalizeAssetIds(selectedAssetIds ?? initialSelectedAssetIds);
+        setSelectedIds(nextSelection);
+        setSelectedId(nextSelection.at(-1) ?? null);
+      } else {
+        setSelectedId(selectedAssetId ?? null);
+      }
+      setPage(0);
+    }
   }
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const timeoutId = window.setTimeout(() => {
       void loadData();
-    }
-  }, [open, loadData]);
+    }, query.trim() ? 180 : 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+      requestKeyRef.current += 1;
+    };
+  }, [open, loadData, query]);
+
+  const handleFolderScopeChange = useCallback((scope: "all" | "edition" | "global") => {
+    folderScopeTouchedRef.current = true;
+    setSelectedFolderScope(scope);
+    setCurrentFolderId("all");
+  }, []);
 
   const activeEdition = useMemo(
     () => editions.find((e) => e.id === activeEditionId),
@@ -281,150 +417,162 @@ export function AdminMediaPicker({
   }, [folders, selectedFolderScope, activeEditionId]);
 
   const activeSelectedAsset = useMemo(
-    () => assets.find((a) => a.id === selectedId) ?? null,
-    [assets, selectedId]
+    () => (selectedId ? assetCache[selectedId] ?? assets.find((asset) => asset.id === selectedId) ?? null : null),
+    [assetCache, assets, selectedId]
   );
 
-  const handleFileDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    filterAndSetFiles(files);
-  };
+  const selectedAssetList = useMemo(
+    () =>
+      selectedIds.flatMap((assetId) => {
+        const asset = assetCache[assetId] ?? assets.find((candidate) => candidate.id === assetId);
+        return asset ? [asset] : [];
+      }),
+    [assetCache, assets, selectedIds]
+  );
 
-  const handleFileInput = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    filterAndSetFiles(files);
-  };
-
-  const filterAndSetFiles = (files: File[]) => {
-    if (typeFilter === "image" || acceptType === "image") {
-      const images = files.filter((f) => f.type.startsWith("image/"));
-      if (images.length !== files.length) {
-        toast.error("Hanya file gambar (JPEG, PNG, WebP, AVIF) yang diizinkan");
-      }
-      setFilesToUpload(images);
-    } else if (typeFilter === "video" || acceptType === "video") {
-      const videos = files.filter((f) => f.type.startsWith("video/"));
-      if (videos.length !== files.length) {
-        toast.error("Hanya file video yang diizinkan");
-      }
-      setFilesToUpload(videos.slice(0, 1));
-    } else if (typeFilter === "pdf" || acceptType === "pdf") {
-      const pdfs = files.filter((f) => f.type === "application/pdf");
-      if (pdfs.length !== files.length) {
-        toast.error("Hanya file PDF yang diizinkan");
-      }
-      setFilesToUpload(pdfs);
-    } else {
-      setFilesToUpload(files);
+  const handleAssetClick = (asset: MediaAssetSummary) => {
+    if (!isMultiple) {
+      setSelectedId(asset.id);
+      return;
     }
+
+    setSelectedId(asset.id);
+    setSelectedIds((current) => {
+      const next = current.includes(asset.id)
+        ? current.filter((assetId) => assetId !== asset.id)
+        : [...current, asset.id];
+      selectedIdsRef.current = next;
+      return next;
+    });
   };
 
   const handleConfirmSelect = () => {
-    if (!activeSelectedAsset) return;
-    onSelect(activeSelectedAsset);
+    if (isMultiple) {
+      if (selectedAssetList.length !== selectedIds.length) return;
+      if (!onSelectMany) return;
+      onSelectMany(selectedAssetList);
+    } else {
+      if (!activeSelectedAsset) return;
+      if (!onSelect) return;
+      onSelect(activeSelectedAsset);
+    }
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden max-h-[90vh] flex flex-col gap-0 sm:max-w-4xl">
+      <DialogContent
+        className="flex max-h-[90vh] w-[calc(100%-1rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:w-full sm:max-w-4xl"
+        onCloseAutoFocus={(event) => {
+          if (!returnFocusRef?.current) return;
+          event.preventDefault();
+          returnFocusRef.current.focus();
+        }}
+      >
         <DialogHeader className="border-b border-dgb-100 bg-background px-5 py-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <DialogTitle className="font-montserrat text-lg font-semibold text-dgb-900">{title}</DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">{description}</DialogDescription>
             </div>
-            {activeEdition ? (
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-dgb-200 bg-dgb-50 px-2.5 py-1 text-xs font-semibold text-dgb">
-                Edisi: {activeEdition.name} ({activeEdition.year})
-              </span>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {isMultiple ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-fb-200 bg-fb-50 px-2.5 py-1 text-xs font-semibold text-fb-800">
+                  {selectedIds.length} dipilih
+                </span>
+              ) : null}
+              {activeEdition ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-dgb-200 bg-dgb-50 px-2.5 py-1 text-xs font-semibold text-dgb">
+                  Edisi: {activeEdition.name} ({activeEdition.year})
+                </span>
+              ) : null}
+            </div>
           </div>
         </DialogHeader>
 
-        <div className="grid min-h-[32rem] flex-1 overflow-hidden lg:grid-cols-[200px_minmax(0,1fr)_260px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] overflow-hidden lg:grid-cols-[200px_minmax(0,1fr)_260px] lg:grid-rows-none">
           {/* Left Sidebar: Folder Browser & Scope */}
-          <aside className="border-b border-border bg-dgb-50/25 p-3.5 lg:border-b-0 lg:border-r overflow-y-auto">
+          <aside className={cn("hidden border-b border-border bg-dgb-50/25 p-3.5 lg:block lg:border-b-0 lg:border-r lg:overflow-y-auto", adminNativeScrollbarClassName)}>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-dgb-800">Cakupan Folder</p>
             <div className="mt-2 space-y-1">
-              <button
+              <Button
+                variant="ghost"
                 type="button"
-                onClick={() => {
-                  setSelectedFolderScope("all");
-                  setCurrentFolderId("all");
-                }}
+                onClick={() => handleFolderScopeChange("all")}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                  "h-auto flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
                   selectedFolderScope === "all" && currentFolderId === "all"
                     ? "bg-dgb text-white"
                     : "text-dgb-900 hover:bg-dgb-50"
                 )}
               >
                 <FolderOpen size={14} /> Semua media
-              </button>
+              </Button>
               {activeEditionId ? (
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
-                  onClick={() => {
-                    setSelectedFolderScope("edition");
-                    setCurrentFolderId("all");
-                  }}
+                  onClick={() => handleFolderScopeChange("edition")}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                    "h-auto flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
                     selectedFolderScope === "edition" ? "bg-dgb text-white" : "text-dgb-900 hover:bg-dgb-50"
                   )}
                 >
                   <Folder size={14} /> Folder edisi ini
-                </button>
+                </Button>
               ) : null}
-              <button
+              <Button
+                variant="ghost"
                 type="button"
-                onClick={() => {
-                  setSelectedFolderScope("global");
-                  setCurrentFolderId("all");
-                }}
+                onClick={() => handleFolderScopeChange("global")}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+                  "h-auto flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
                   selectedFolderScope === "global" ? "bg-dgb text-white" : "text-dgb-900 hover:bg-dgb-50"
                 )}
               >
                 <Folder size={14} /> Folder global
-              </button>
+              </Button>
             </div>
 
             <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-dgb-800">Daftar Folder</p>
             <div className="mt-2 space-y-0.5">
-              <button
+              <Button
+                variant="ghost"
                 type="button"
-                onClick={() => setCurrentFolderId(null)}
+                onClick={() => {
+                  folderScopeTouchedRef.current = true;
+                  setCurrentFolderId(null);
+                }}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors",
+                  "h-auto flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors",
                   currentFolderId === null ? "bg-white font-semibold text-dgb shadow-xs" : "text-dgb-900/80 hover:bg-white/70"
                 )}
               >
                 <Folder size={13} /> Root media
-              </button>
+              </Button>
               {scopedFolders.map((folder) => (
-                <button
+                <Button
+                  variant="ghost"
                   key={folder.id}
                   type="button"
-                  onClick={() => setCurrentFolderId(folder.id)}
+                  onClick={() => {
+                    folderScopeTouchedRef.current = true;
+                    setCurrentFolderId(folder.id);
+                  }}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors",
+                    "h-auto flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors",
                     currentFolderId === folder.id ? "bg-white font-semibold text-dgb shadow-xs" : "text-dgb-900/80 hover:bg-white/70"
                   )}
                 >
                   <Folder size={13} />
                   <span className="truncate">{folder.name}</span>
-                </button>
+                </Button>
               ))}
             </div>
           </aside>
 
           {/* Center: Search, Upload panel, Asset Grid */}
-          <section className="flex flex-col min-w-0 p-4 overflow-y-auto">
+          <section className={cn("flex min-h-0 min-w-0 flex-col overflow-y-auto p-4", adminNativeScrollbarClassName)}>
             {/* Toolbar */}
             <div className="flex flex-col gap-3 border-b border-border pb-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="relative flex-1">
@@ -440,147 +588,76 @@ export function AdminMediaPicker({
               <div className="flex items-center gap-2">
                 {acceptType === "all" ? (
                   <div className="flex rounded-md border border-border bg-muted p-0.5">
-                    <button
+                    <Button
+                      variant="ghost"
                       type="button"
                       onClick={() => setTypeFilter("all")}
-                      className={cn("px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "all" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
+                      className={cn("h-auto px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "all" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
                     >
                       Semua
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
                       type="button"
                       onClick={() => setTypeFilter("image")}
-                      className={cn("px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "image" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
+                      className={cn("h-auto px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "image" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
                     >
                       Gambar
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
                       type="button"
                       onClick={() => setTypeFilter("video")}
-                      className={cn("px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "video" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
+                      className={cn("h-auto px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "video" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
                     >
                       Video
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
                       type="button"
                       onClick={() => setTypeFilter("pdf")}
-                      className={cn("px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "pdf" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
+                      className={cn("h-auto px-2 py-1 text-[11px] font-medium rounded-xs", typeFilter === "pdf" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
                     >
                       PDF
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
 
                 <div className="flex rounded-md border border-border bg-muted p-0.5">
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     aria-label="Grid view"
                     onClick={() => setViewMode("grid")}
-                    className={cn("grid size-7 place-items-center rounded-xs", viewMode === "grid" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
+                    className={cn("grid size-7 h-7 w-7 place-items-center rounded-xs p-0", viewMode === "grid" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
                   >
                     <Grid2X2 size={13} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
                     type="button"
                     aria-label="List view"
                     onClick={() => setViewMode("list")}
-                    className={cn("grid size-7 place-items-center rounded-xs", viewMode === "list" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
+                    className={cn("grid size-7 h-7 w-7 place-items-center rounded-xs p-0", viewMode === "list" ? "bg-white text-dgb shadow-xs" : "text-muted-foreground")}
                   >
                     <List size={13} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
 
-            {/* Inline Uploader (Accessible for media.manage) */}
-            {canManageMedia ? (
-              <div
-                onDragEnter={() => setIsDragging(true)}
-                onDragOver={(e) => e.preventDefault()}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleFileDrop}
-                className={cn(
-                  "my-3 rounded-lg border border-dashed p-3 text-center transition-colors",
-                  isDragging ? "border-fb-400 bg-fb-50" : "border-dgb-200 bg-dgb-50/20"
-                )}
-              >
-                <input
-                  ref={fileInputRef}
-                  className="hidden"
-                  type="file"
-                  accept={
-                    activeUploadEndpoint === "image"
-                      ? "image/jpeg,image/png,image/webp,image/avif"
-                      : activeUploadEndpoint === "video"
-                      ? "video/mp4,video/webm"
-                      : "application/pdf"
-                  }
-                  multiple={activeUploadEndpoint === "image"}
-                  onChange={handleFileInput}
-                />
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div className="flex items-center gap-2.5 text-left">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-dgb text-white">
-                      <UploadCloud size={15} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold text-dgb-900">Unggah file baru</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {filesToUpload.length ? `${filesToUpload.length} file dipilih` : "Tarik file ke sini atau pilih dari perangkat"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs border-dgb-200 text-dgb hover:bg-dgb-50"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Pilih file
-                    </Button>
-                    {filesToUpload.length > 0 ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={isUploading}
-                        className="h-8 bg-dgb text-xs text-white hover:bg-dgb-600"
-                        onClick={() =>
-                          startUpload(filesToUpload, {
-                            folderId: typeof currentFolderId === "string" ? currentFolderId : null,
-                          })
-                        }
-                      >
-                        {isUploading ? "Mengunggah..." : `Unggah (${filesToUpload.length})`}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {filesToUpload.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {filesToUpload.map((file) => (
-                      <span
-                        key={`${file.name}-${file.lastModified}`}
-                        className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-dgb-800 border border-dgb-100"
-                      >
-                        <FileImage size={12} />
-                        <span className="max-w-36 truncate">{file.name}</span>
-                        <button
-                          type="button"
-                          aria-label={`Hapus ${file.name}`}
-                          onClick={() => setFilesToUpload((curr) => curr.filter((f) => f !== file))}
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+            <AdminMediaUploader
+              folderId={typeof currentFolderId === "string" && currentFolderId !== "all" ? currentFolderId : null}
+              folderName={
+                currentFolderId === "all" || currentFolderId === null
+                  ? "Tanpa folder"
+                  : folders.find((folder) => folder.id === currentFolderId)?.name ?? "Folder media"
+              }
+              acceptType={typeFilter}
+              canManage={canManageMedia}
+              variant="picker"
+              onUploaded={(identities) => void handleUploaded(identities)}
+            />
 
             {/* Asset List */}
             {isLoading ? (
@@ -596,19 +673,20 @@ export function AdminMediaPicker({
                 <p className="text-xs text-muted-foreground">Coba ubah filter atau unggah media baru.</p>
               </div>
             ) : viewMode === "grid" ? (
-              <div className="grid grid-cols-2 gap-2.5 pt-2 sm:grid-cols-3 md:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2.5 pt-2 sm:grid-cols-2 md:grid-cols-4">
                 {assets.map((asset) => {
                   const isImg = asset.mimeType.startsWith("image/");
                   const isVid = asset.mimeType.startsWith("video/");
-                  const isSelected = selectedId === asset.id;
+                  const isSelected = isMultiple ? selectedIds.includes(asset.id) : selectedId === asset.id;
 
                   return (
-                    <button
+                    <Button
+                      variant="ghost"
                       key={asset.id}
                       type="button"
-                      onClick={() => setSelectedId(asset.id)}
+                      onClick={() => handleAssetClick(asset)}
                       className={cn(
-                        "group relative flex flex-col overflow-hidden rounded-lg border text-left transition-all",
+                        "group relative flex h-auto flex-col overflow-hidden rounded-lg border p-0 text-left transition-all",
                         isSelected
                           ? "border-fb-400 bg-fb-50/30 ring-2 ring-fb-300"
                           : "border-border bg-white hover:border-dgb-200"
@@ -646,7 +724,7 @@ export function AdminMediaPicker({
                           {formatBytes(asset.bytes)}
                         </p>
                       </div>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -654,15 +732,16 @@ export function AdminMediaPicker({
               <div className="space-y-1.5 pt-2">
                 {assets.map((asset) => {
                   const isImg = asset.mimeType.startsWith("image/");
-                  const isSelected = selectedId === asset.id;
+                  const isSelected = isMultiple ? selectedIds.includes(asset.id) : selectedId === asset.id;
 
                   return (
-                    <button
+                    <Button
+                      variant="ghost"
                       key={asset.id}
                       type="button"
-                      onClick={() => setSelectedId(asset.id)}
+                      onClick={() => handleAssetClick(asset)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md border p-2 text-left transition-colors",
+                        "flex h-auto w-full items-center gap-3 rounded-md border p-2 text-left transition-colors",
                         isSelected
                           ? "border-fb-400 bg-fb-50/40 ring-1 ring-fb-300"
                           : "border-border bg-white hover:border-dgb-200"
@@ -684,15 +763,45 @@ export function AdminMediaPicker({
                         </p>
                       </div>
                       {isSelected ? <Check size={15} className="mr-1 text-fb" /> : null}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
             )}
+
+            {total > 0 ? (
+              <div className="mt-auto flex flex-col gap-2 border-t border-border pt-3 text-[11px] sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-muted-foreground">
+                  Menampilkan {page * pageSize + 1} sampai {Math.min((page + 1) * pageSize, total)} dari {total}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLoading || page === 0}
+                    onClick={() => setPage((current) => Math.max(current - 1, 0))}
+                    className="h-8 text-[11px]"
+                  >
+                    Sebelumnya
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLoading || !hasMore}
+                    onClick={() => setPage((current) => current + 1)}
+                    className="h-8 text-[11px]"
+                  >
+                    Berikutnya
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           {/* Right Sidebar: Selected Asset Inspector & Confirmation */}
-          <aside className="border-t border-border bg-muted/20 p-4 lg:border-l lg:border-t-0 flex flex-col justify-between overflow-y-auto">
+          <aside className={cn("border-t border-border bg-muted/20 p-4 lg:border-l lg:border-t-0 flex flex-col justify-between overflow-y-auto", adminNativeScrollbarClassName)}>
             {activeSelectedAsset ? (
               <div className="space-y-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-fb-700">Detail Terpilih</p>
@@ -745,14 +854,19 @@ export function AdminMediaPicker({
               </div>
             )}
 
-            <div className="mt-4 border-t border-border pt-3 space-y-2">
+            <div className="mt-4 space-y-2 border-t border-border pt-3">
+              {isMultiple ? (
+                <p className="text-center text-[11px] font-medium text-muted-foreground">
+                  {selectedIds.length} media dipilih
+                </p>
+              ) : null}
               <Button
                 type="button"
-                disabled={!activeSelectedAsset}
+                disabled={isMultiple ? selectedIds.length === 0 || selectedAssetList.length !== selectedIds.length : !activeSelectedAsset}
                 onClick={handleConfirmSelect}
                 className="w-full h-9 bg-dgb text-xs font-semibold text-white hover:bg-dgb-600"
               >
-                Gunakan media ini
+                {isMultiple ? `Pilih ${selectedIds.length} media` : "Gunakan media ini"}
               </Button>
               <Button
                 type="button"
@@ -793,32 +907,67 @@ export function AdminMediaField({
   value,
   initialAsset = null,
   acceptType = "image",
-  canManageMedia = true,
+  canManageMedia = false,
   required = false,
   className,
   onChange,
   activeEditionId = null,
 }: AdminMediaFieldProps) {
-  const [selectedAsset, setSelectedAsset] = useState<MediaAssetSummary | null>(initialAsset);
+  const [selectedAsset, setSelectedAsset] = useState<MediaAssetSummary | null>(() =>
+    value === undefined || (value !== null && value !== "" && initialAsset?.id === value) ? initialAsset : null
+  );
+  const [isLocallyCleared, setIsLocallyCleared] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const [prevInitialAsset, setPrevInitialAsset] = useState(initialAsset);
-  if (initialAsset !== prevInitialAsset) {
-    setPrevInitialAsset(initialAsset);
-    setSelectedAsset(initialAsset);
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setIsLocallyCleared(false);
+    setSelectedAsset(
+      value === undefined
+        ? initialAsset
+        : value && initialAsset?.id === value
+          ? initialAsset
+          : selectedAsset?.id === value
+            ? selectedAsset
+            : null
+    );
   }
+
+ const [prevInitialAsset, setPrevInitialAsset] = useState(initialAsset);
+ if (initialAsset !== prevInitialAsset) {
+   setPrevInitialAsset(initialAsset);
+    const initialAssetIdChanged = (initialAsset?.id ?? null) !== (prevInitialAsset?.id ?? null);
+    if (!isLocallyCleared || (value === undefined && initialAssetIdChanged)) {
+      if (value === undefined && initialAssetIdChanged) setIsLocallyCleared(false);
+     setSelectedAsset(
+       value === undefined
+         ? initialAsset
+         : value && initialAsset?.id === value
+           ? initialAsset
+           : selectedAsset?.id === value
+             ? selectedAsset
+             : null
+     );
+   }
+ }
 
   const handleSelect = (asset: MediaAssetSummary) => {
     setSelectedAsset(asset);
+    setIsLocallyCleared(false);
     onChange?.(asset);
   };
 
   const handleRemove = () => {
     setSelectedAsset(null);
+    setIsLocallyCleared(true);
     onChange?.(null);
     setConfirmRemoveOpen(false);
   };
+
+  const effectiveAssetId = isLocallyCleared ? "" : selectedAsset?.id ?? value ?? "";
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -833,13 +982,14 @@ export function AdminMediaField({
         </div>
       ) : null}
 
-      <input type="hidden" name={name} value={selectedAsset?.id ?? value ?? ""} />
+      <input type="hidden" name={name} value={effectiveAssetId} />
 
       {selectedAsset ? (
         <div className="space-y-2">
           <AdminMediaPreview asset={selectedAsset} aspectRatioHint={aspectRatioHint} />
           <div className="flex items-center gap-2">
             <Button
+              ref={triggerRef}
               type="button"
               variant="outline"
               size="sm"
@@ -860,9 +1010,15 @@ export function AdminMediaField({
           </div>
         </div>
       ) : (
-        <div
+        <Button
+          ref={triggerRef}
+          type="button"
+          variant="ghost"
+          size="default"
+          aria-haspopup="dialog"
+          aria-expanded={pickerOpen}
           onClick={() => setPickerOpen(true)}
-          className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-dgb-200 bg-dgb-50/20 px-4 py-6 text-center transition-colors hover:border-fb-300 hover:bg-fb-50/30"
+          className="flex h-auto w-full cursor-pointer flex-col items-center justify-center gap-0 rounded-lg border border-dashed border-dgb-200 bg-dgb-50/20 px-4 py-6 text-center whitespace-normal transition-colors hover:border-fb-300 hover:bg-fb-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-dgb-300 focus-visible:ring-offset-2"
         >
           <span className="grid size-10 place-items-center rounded-md bg-white border border-dgb-100 text-dgb shadow-xs">
             {acceptType === "video" ? (
@@ -874,11 +1030,8 @@ export function AdminMediaField({
             )}
           </span>
           <p className="mt-2 text-xs font-semibold text-dgb-900">Pilih media</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {aspectRatioHint ? `Disarankan rasio ${aspectRatioHint}. ` : ""}
-            Klik untuk membuka pustaka media.
-          </p>
-        </div>
+          {aspectRatioHint ? <p className="mt-0.5 text-[11px] text-muted-foreground">Rasio {aspectRatioHint}</p> : null}
+        </Button>
       )}
 
       {hint ? <p className="text-[11px] leading-4 text-muted-foreground">{hint}</p> : null}
@@ -887,10 +1040,12 @@ export function AdminMediaField({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         onSelect={handleSelect}
-        selectedAssetId={selectedAsset?.id}
+        selectedAssetId={effectiveAssetId || null}
         acceptType={acceptType}
         canManageMedia={canManageMedia}
         activeEditionId={activeEditionId}
+        initialAssets={selectedAsset ? [selectedAsset] : []}
+        returnFocusRef={triggerRef}
       />
 
       <AlertDialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>

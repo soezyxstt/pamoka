@@ -4,41 +4,30 @@ import {
   ArrowDown,
   ArrowUp,
   Building,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Edit2,
-  Eye,
   FolderTree,
-  Layers,
   LayoutGrid,
   Loader2,
   Plus,
-  Power,
-  PowerOff,
   Search,
-  Sparkles,
   Trash2,
-  User,
-  UserCheck,
   UserPlus,
   Users,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import {
   AdminBadge,
-  AdminButton,
   AdminCard,
   AdminCardHeader,
   AdminEmptyState,
   AdminField,
   AdminInput,
   AdminSelect,
-  AdminTextarea,
 } from "@/components/admin/primitives";
 import { AdminMediaField, type MediaAssetSummary } from "@/components/admin/media-picker";
 import {
@@ -52,6 +41,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +50,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { AdminEditionContext } from "@/server/cms/context";
 import {
@@ -118,7 +109,6 @@ type CommitteeWorkspaceProps = {
   initialMembers: CommitteeMemberItem[];
   initialPeople: PersonOption[];
   canEdit: boolean;
-  canPublish: boolean;
 };
 
 export function CommitteeWorkspaceClient({
@@ -127,7 +117,6 @@ export function CommitteeWorkspaceClient({
   initialMembers,
   initialPeople,
   canEdit,
-  canPublish,
 }: CommitteeWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"structure" | "members" | "preview">("structure");
   const [isPending, startTransition] = useTransition();
@@ -216,6 +205,47 @@ export function CommitteeWorkspaceClient({
     const builtTree = buildNodes(null, 1);
     return { tree: builtTree, flatTree: flat, unitMap: map };
   }, [initialUnits, initialMembers]);
+
+  const disabledParentUnitIds = useMemo(() => {
+    const disabled = new Set<string>();
+    const levelById = new Map(flatTree.map((unit) => [unit.id, unit.level]));
+    if (!editingUnit) {
+      for (const unit of flatTree) {
+        if (unit.level >= 4) disabled.add(unit.id);
+      }
+      return disabled;
+    }
+
+    const childrenByParent = new Map<string, string[]>();
+    for (const unit of initialUnits) {
+      if (!unit.parentId) continue;
+      const children = childrenByParent.get(unit.parentId) ?? [];
+      children.push(unit.id);
+      childrenByParent.set(unit.parentId, children);
+    }
+    const descendants = new Set<string>();
+    const collectDescendants = (unitId: string) => {
+      for (const childId of childrenByParent.get(unitId) ?? []) {
+        if (descendants.has(childId)) continue;
+        descendants.add(childId);
+        collectDescendants(childId);
+      }
+    };
+    collectDescendants(editingUnit.id);
+    const subtreeHeight = (unitId: string): number => {
+      const children = childrenByParent.get(unitId) ?? [];
+      return children.length === 0 ? 0 : 1 + Math.max(...children.map(subtreeHeight));
+    };
+    const editingSubtreeHeight = subtreeHeight(editingUnit.id);
+
+    for (const unit of flatTree) {
+      const nextDepth = (levelById.get(unit.id) ?? 1) + 1 + editingSubtreeHeight;
+      if (unit.id === editingUnit.id || descendants.has(unit.id) || nextDepth > 4) {
+        disabled.add(unit.id);
+      }
+    }
+    return disabled;
+  }, [editingUnit, flatTree, initialUnits]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -332,17 +362,21 @@ export function CommitteeWorkspaceClient({
 
   // Reorder Unit Up/Down
   const handleReorderUnit = (unit: TreeNode, direction: "up" | "down") => {
-    const siblings = flatTree.filter((u) => u.parentId === unit.parentId);
+    const siblings = flatTree
+      .filter((candidate) => candidate.parentId === unit.parentId)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
     const currentIndex = siblings.findIndex((u) => u.id === unit.id);
     if (currentIndex === -1) return;
     const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex < 0 || targetIndex >= siblings.length) return;
 
-    const targetUnit = siblings[targetIndex];
-    const items = [
-      { id: unit.id, displayOrder: targetUnit.displayOrder },
-      { id: targetUnit.id, displayOrder: unit.displayOrder },
-    ];
+    const reordered = [...siblings];
+    const movedUnit = reordered.splice(currentIndex, 1)[0]!;
+    reordered.splice(targetIndex, 0, movedUnit);
+    const items = reordered.map((candidate, index) => ({
+      id: candidate.id,
+      displayOrder: index,
+    }));
 
     startTransition(async () => {
       try {
@@ -429,6 +463,7 @@ export function CommitteeWorkspaceClient({
       try {
         const formData = new FormData();
         formData.append("id", deleteMemberTarget.id);
+        formData.append("version", String(deleteMemberTarget.version));
         const res = await removeCommitteeAssignmentAction(formData);
         if (res.success) {
           toast.success(`Penugasan "${deleteMemberTarget.personName}" berhasil dihapus`);
@@ -485,7 +520,7 @@ export function CommitteeWorkspaceClient({
 
   // Render Tree Hierarchy Recursively
   const renderTreeNodes = (nodes: TreeNode[]) => {
-    return nodes.map((node) => {
+    return nodes.map((node, nodeIndex) => {
       const isExpanded = expandedNodes[node.id] !== false; // default expanded
       const hasChildren = node.children && node.children.length > 0;
       const isSelected = selectedUnitId === node.id;
@@ -500,33 +535,48 @@ export function CommitteeWorkspaceClient({
                 ? "border-dgb-300 bg-dgb-50/50 shadow-xs ring-1 ring-dgb/20"
                 : "border-border bg-card hover:border-dgb-200 hover:bg-muted/30",
               node.level === 1 && "font-medium",
-              node.level === 2 && "ml-4 border-l-2 border-l-fb-400",
-              node.level === 3 && "ml-8 border-l-2 border-l-dgb-400",
-              node.level === 4 && "ml-12 border-l-2 border-l-amber-400 text-xs"
+              node.level === 2 && "ml-1.5 border-l-2 border-l-fb-400 sm:ml-4",
+              node.level === 3 && "ml-2 border-l-2 border-l-dgb-400 sm:ml-8",
+              node.level === 4 && "ml-3 border-l-2 border-l-amber-400 text-xs sm:ml-12"
             )}
           >
             {/* Left: Expander + Unit Name + Info */}
             <div
-              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
-              onClick={() => setSelectedUnitId(isSelected ? "all" : node.id)}
+              className="flex min-w-0 flex-1 items-center gap-2"
             >
               {hasChildren ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleNode(node.id);
                   }}
-                  className="grid size-6 place-items-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  aria-label={isExpanded ? "Tutup cabang" : "Buka cabang"}
+                  className="size-6 rounded-sm p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-expanded={isExpanded}
+                    aria-label={`${isExpanded ? "Tutup" : "Buka"} ${node.name}`}
                 >
                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
+                </Button>
               ) : (
                 <span className="size-6 text-center text-xs text-muted-foreground/50">·</span>
               )}
 
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
+                onClick={() => setSelectedUnitId(isSelected ? "all" : node.id)}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                aria-label={`Filter penugasan untuk ${node.name}`}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedUnitId(isSelected ? "all" : node.id);
+                  }
+                }}
+              >
                 <span className="truncate font-montserrat font-semibold text-foreground">
                   {node.name}
                 </span>
@@ -540,11 +590,11 @@ export function CommitteeWorkspaceClient({
                     node.level === 4 && "bg-amber-100 text-amber-800"
                   )}
                 >
-                  Lvl {node.level}
+                  Tingkat {node.level}
                 </span>
 
                 <span
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground"
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] text-muted-foreground"
                   title={`${node.memberCount} penugasan panitia`}
                 >
                   <Users size={11} className="text-dgb" />
@@ -561,7 +611,7 @@ export function CommitteeWorkspaceClient({
 
             {/* Right: Quick Actions */}
             {canEdit && (
-              <div className="flex items-center gap-1 opacity-90 transition-opacity group-hover:opacity-100">
+              <div className="flex w-full flex-wrap items-center justify-end gap-1 opacity-90 transition-opacity group-hover:opacity-100 sm:w-auto">
                 {canAddSubunit && (
                   <Button
                     type="button"
@@ -569,7 +619,7 @@ export function CommitteeWorkspaceClient({
                     size="sm"
                     className="h-7 px-2 text-xs text-dgb hover:bg-dgb-50"
                     onClick={() => openCreateUnitDialog(node.id)}
-                    title={`Tambah sub-unit level ${node.level + 1}`}
+                    aria-label={`Tambah sub-unit pada ${node.name}`}
                   >
                     <Plus size={13} className="mr-1" /> Sub-unit
                   </Button>
@@ -580,8 +630,8 @@ export function CommitteeWorkspaceClient({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs text-fb-600 hover:bg-fb-50"
-                  onClick={() => openAssignMemberDialog(node.id)}
-                  title="Tambah penugasan panitia pada unit ini"
+                    onClick={() => openAssignMemberDialog(node.id)}
+                    aria-label={`Tambah penugasan pada ${node.name}`}
                 >
                   <UserPlus size={13} className="mr-1" /> Tugas
                 </Button>
@@ -591,8 +641,9 @@ export function CommitteeWorkspaceClient({
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => handleReorderUnit(node, "up")}
-                  title="Pindah ke atas"
+                    onClick={() => handleReorderUnit(node, "up")}
+                    disabled={nodeIndex === 0}
+                    aria-label={`Pindahkan ${node.name} ke atas`}
                 >
                   <ArrowUp size={13} />
                 </Button>
@@ -602,8 +653,9 @@ export function CommitteeWorkspaceClient({
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => handleReorderUnit(node, "down")}
-                  title="Pindah ke bawah"
+                    onClick={() => handleReorderUnit(node, "down")}
+                    disabled={nodeIndex === nodes.length - 1}
+                    aria-label={`Pindahkan ${node.name} ke bawah`}
                 >
                   <ArrowDown size={13} />
                 </Button>
@@ -613,8 +665,8 @@ export function CommitteeWorkspaceClient({
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => openEditUnitDialog(node)}
-                  title="Edit unit panitia"
+                    onClick={() => openEditUnitDialog(node)}
+                    aria-label={`Edit ${node.name}`}
                 >
                   <Edit2 size={13} />
                 </Button>
@@ -624,8 +676,8 @@ export function CommitteeWorkspaceClient({
                   variant="ghost"
                   size="sm"
                   className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                  onClick={() => setDeleteUnitTarget(node)}
-                  title="Hapus unit panitia"
+                    onClick={() => setDeleteUnitTarget(node)}
+                    aria-label={`Hapus ${node.name}`}
                 >
                   <Trash2 size={13} />
                 </Button>
@@ -647,9 +699,9 @@ export function CommitteeWorkspaceClient({
       {/* Header Summary Card */}
       <AdminCard>
         <AdminCardHeader
-          eyebrow="Konteks Edisi Aktif"
+          eyebrow="Edisi terpilih"
           title={`Panitia ${edition.name} (${edition.year})`}
-          description="Kelola susunan panitia per edisi dengan hierarki unit bertingkat (maksimal 4 level) dan penugasan profil orang."
+          description="Unit dan penugasan panitia."
           action={
             <div className="flex flex-wrap items-center gap-2">
               <AdminBadge value={edition.lifecycle} />
@@ -731,44 +783,50 @@ export function CommitteeWorkspaceClient({
 
       {/* Tabs Navigation */}
       <div className="flex border-b border-border">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="default"
           onClick={() => setActiveTab("structure")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-4 py-2.5 font-montserrat text-sm font-semibold transition-colors",
+            "flex h-auto items-center gap-2 rounded-none border-b-2 px-4 py-2.5 font-montserrat text-sm font-semibold transition-colors",
             activeTab === "structure"
               ? "border-dgb text-dgb"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
           <FolderTree size={16} /> Struktur & Penugasan
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="default"
           onClick={() => setActiveTab("members")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-4 py-2.5 font-montserrat text-sm font-semibold transition-colors",
+            "flex h-auto items-center gap-2 rounded-none border-b-2 px-4 py-2.5 font-montserrat text-sm font-semibold transition-colors",
             activeTab === "members"
               ? "border-dgb text-dgb"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
           <Users size={16} /> Daftar Anggota ({initialMembers.length})
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="default"
           onClick={() => setActiveTab("preview")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-4 py-2.5 font-montserrat text-sm font-semibold transition-colors",
+            "flex h-auto items-center gap-2 rounded-none border-b-2 px-4 py-2.5 font-montserrat text-sm font-semibold transition-colors",
             activeTab === "preview"
               ? "border-dgb text-dgb"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          <LayoutGrid size={16} /> Preview Visual
-        </button>
+          <LayoutGrid size={16} /> Pratinjau
+        </Button>
       </div>
 
       {/* ------------------------------------------------------------------- */}
@@ -778,7 +836,7 @@ export function CommitteeWorkspaceClient({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Left Column: Hierarchical Unit Tree */}
           <div className="space-y-4 lg:col-span-5">
-            <AdminCard>
+            <AdminCard padding="none">
               <div className="flex items-center justify-between border-b border-border/80 p-4">
                 <div>
                   <h3 className="font-montserrat text-sm font-semibold text-foreground">
@@ -830,13 +888,15 @@ export function CommitteeWorkspaceClient({
                         <span>
                           Filter aktif: <strong>{unitMap.get(selectedUnitId)?.name}</strong>
                         </span>
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setSelectedUnitId("all")}
-                          className="font-medium text-dgb hover:underline"
+                          className="h-auto rounded-none px-0 py-0 font-medium text-dgb hover:underline"
                         >
                           Tampilkan Semua
-                        </button>
+                        </Button>
                       </div>
                     )}
                     {renderTreeNodes(tree)}
@@ -848,7 +908,7 @@ export function CommitteeWorkspaceClient({
 
           {/* Right Column: Member Assignments in Selected / All Units */}
           <div className="space-y-4 lg:col-span-7">
-            <AdminCard>
+            <AdminCard padding="none">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 p-4">
                 <div>
                   <h3 className="font-montserrat text-sm font-semibold text-foreground">
@@ -877,37 +937,41 @@ export function CommitteeWorkspaceClient({
               <div className="flex flex-wrap items-center gap-3 border-b border-border/50 bg-muted/10 p-3">
                 <div className="relative min-w-[180px] flex-1">
                   <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                  <input
+                  <AdminInput
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cari nama atau jabatan panitia..."
+                    aria-label="Cari anggota panitia"
                     className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
                   />
                 </div>
 
-                <select
+                <AdminSelect
+                  aria-label="Filter unit panitia"
                   value={selectedUnitId}
-                  onChange={(e) => setSelectedUnitId(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-                >
-                  <option value="all">Semua Unit ({initialUnits.length})</option>
-                  {flatTree.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {"—".repeat(u.level - 1)} {u.name} (Lvl {u.level})
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={setSelectedUnitId}
+                  className="h-9 w-auto min-w-[11rem] rounded-md px-3 text-xs"
+                  options={[
+                    { value: "all", label: `Semua Unit (${initialUnits.length})` },
+                    ...flatTree.map((u) => ({
+                      value: u.id,
+                      label: <>{"  ".repeat(u.level - 1)}{u.name} (Tingkat {u.level})</>,
+                    })),
+                  ]}
+                />
 
-                <select
+                <AdminSelect
+                  aria-label="Filter status penugasan"
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-                >
-                  <option value="all">Semua Status</option>
-                  <option value="active">Aktif</option>
-                  <option value="inactive">Nonaktif</option>
-                </select>
+                  onValueChange={(value) => setStatusFilter(value as "all" | "active" | "inactive")}
+                  className="h-9 w-auto min-w-[9rem] rounded-md px-3 text-xs"
+                  options={[
+                    { value: "all", label: "Semua Status" },
+                    { value: "active", label: "Aktif" },
+                    { value: "inactive", label: "Nonaktif" },
+                  ]}
+                />
               </div>
 
               {/* Members List */}
@@ -1023,7 +1087,7 @@ export function CommitteeWorkspaceClient({
       {/* TAB 2: DAFTAR SELURUH ANGGOTA PANITIA (TABLE VIEW) */}
       {/* ------------------------------------------------------------------- */}
       {activeTab === "members" && (
-        <AdminCard>
+        <AdminCard padding="none">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 p-4">
             <div>
               <h3 className="font-montserrat text-base font-semibold text-foreground">
@@ -1050,66 +1114,70 @@ export function CommitteeWorkspaceClient({
           <div className="flex flex-wrap items-center gap-3 border-b border-border/50 bg-muted/10 p-3">
             <div className="relative min-w-[200px] flex-1">
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <input
+              <AdminInput
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cari nama, jabatan, atau unit..."
+                aria-label="Cari panitia"
                 className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
               />
             </div>
 
-            <select
+            <AdminSelect
+              aria-label="Filter unit panitia"
               value={selectedUnitId}
-              onChange={(e) => setSelectedUnitId(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-            >
-              <option value="all">Semua Unit ({initialUnits.length})</option>
-              {flatTree.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {"—".repeat(u.level - 1)} {u.name} (Lvl {u.level})
-                </option>
-              ))}
-            </select>
+              onValueChange={setSelectedUnitId}
+              className="h-9 w-auto min-w-[11rem] rounded-md px-3 text-xs"
+              options={[
+                { value: "all", label: `Semua Unit (${initialUnits.length})` },
+                ...flatTree.map((u) => ({
+                  value: u.id,
+                  label: <>{"  ".repeat(u.level - 1)}{u.name} (Tingkat {u.level})</>,
+                })),
+              ]}
+            />
 
-            <select
+            <AdminSelect
+              aria-label="Filter status panitia"
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "inactive")}
-              className="h-9 rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-            >
-              <option value="all">Semua Status</option>
-              <option value="active">Aktif</option>
-              <option value="inactive">Nonaktif</option>
-            </select>
+              onValueChange={(value) => setStatusFilter(value as "all" | "active" | "inactive")}
+              className="h-9 w-auto min-w-[9rem] rounded-md px-3 text-xs"
+              options={[
+                { value: "all", label: "Semua Status" },
+                { value: "active", label: "Aktif" },
+                { value: "inactive", label: "Nonaktif" },
+              ]}
+            />
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-border bg-muted/40 font-montserrat text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3">Panitia</th>
-                  <th className="px-4 py-3">Jabatan</th>
-                  <th className="px-4 py-3">Unit Organisasi</th>
-                  <th className="px-4 py-3 text-center">Urutan</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                  {canEdit && <th className="px-4 py-3 text-right">Aksi</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
+          <div>
+            <Table className="text-xs">
+              <TableHeader className="bg-muted/40 font-montserrat text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <TableRow>
+                  <TableHead className="px-4 py-3">Panitia</TableHead>
+                  <TableHead className="px-4 py-3">Jabatan</TableHead>
+                  <TableHead className="px-4 py-3">Unit organisasi</TableHead>
+                  <TableHead className="px-4 py-3 text-center">Urutan</TableHead>
+                  <TableHead className="px-4 py-3 text-center">Status</TableHead>
+                  {canEdit && <TableHead className="px-4 py-3 text-right">Aksi</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredMembers.length === 0 ? (
-                  <tr>
-                    <td colSpan={canEdit ? 6 : 5} className="py-8 text-center text-muted-foreground">
+                  <TableRow>
+                    <TableCell colSpan={canEdit ? 6 : 5} className="py-8 text-center text-muted-foreground">
                       Tidak ada data anggota panitia.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   filteredMembers.map((member) => {
                     const unit = unitMap.get(member.unitId);
 
                     return (
-                      <tr key={member.id} className="transition-colors hover:bg-muted/30">
-                        <td className="px-4 py-3">
+                      <TableRow key={member.id} className="hover:bg-muted/30">
+                        <TableCell className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="relative size-8 shrink-0 overflow-hidden rounded-full border border-border bg-muted">
                               {member.portraitUrl ? (
@@ -1137,42 +1205,34 @@ export function CommitteeWorkspaceClient({
                               )}
                             </div>
                           </div>
-                        </td>
+                        </TableCell>
 
-                        <td className="px-4 py-3 font-medium text-dgb">{member.title}</td>
+                        <TableCell className="px-4 py-3 font-medium text-dgb">{member.title}</TableCell>
 
-                        <td className="px-4 py-3">
+                        <TableCell className="px-4 py-3">
                           <span className="inline-block rounded-xs bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
-                            {unit?.name ?? "—"}
+                            {unit?.name ?? "-"}
                           </span>
-                        </td>
+                        </TableCell>
 
-                        <td className="px-4 py-3 text-center text-muted-foreground">
+                        <TableCell className="px-4 py-3 text-center text-muted-foreground">
                           {member.displayOrder}
-                        </td>
+                        </TableCell>
 
-                        <td className="px-4 py-3 text-center">
-                          {member.active ? (
-                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">
-                              Aktif
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground border border-border">
-                              Nonaktif
-                            </span>
-                          )}
-                        </td>
+                        <TableCell className="px-4 py-3 text-center">
+                          <AdminBadge value={member.active ? "active" : "inactive"} />
+                        </TableCell>
 
                         {canEdit && (
-                          <td className="px-4 py-3 text-right">
+                          <TableCell className="px-4 py-3 text-right">
                             <div className="inline-flex items-center gap-1">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                onClick={() => openEditMemberDialog(member)}
-                                title="Edit penugasan"
+                                 onClick={() => openEditMemberDialog(member)}
+                                 aria-label={`Edit penugasan ${member.personName}`}
                               >
                                 <Edit2 size={13} />
                               </Button>
@@ -1181,20 +1241,20 @@ export function CommitteeWorkspaceClient({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                                onClick={() => setDeleteMemberTarget(member)}
-                                title="Hapus penugasan"
+                                 onClick={() => setDeleteMemberTarget(member)}
+                                 aria-label={`Hapus penugasan ${member.personName}`}
                               >
                                 <Trash2 size={13} />
                               </Button>
                             </div>
-                          </td>
+                          </TableCell>
                         )}
-                      </tr>
+                      </TableRow>
                     );
                   })
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </AdminCard>
       )}
@@ -1206,9 +1266,9 @@ export function CommitteeWorkspaceClient({
         <div className="space-y-6">
           <AdminCard>
             <AdminCardHeader
-              eyebrow="Preview Struktur Organisasi Panitia"
+              eyebrow="Pratinjau struktur"
               title={`Bagan Kepanitiaan ${edition.name} (${edition.year})`}
-              description="Visualisasi hierarki struktural unit dan penugasan panitia aktif."
+              description="Bagan panitia aktif."
             />
 
             <div className="space-y-8 p-4 md:p-6">
@@ -1241,7 +1301,7 @@ export function CommitteeWorkspaceClient({
                                 {rootUnit.name}
                               </h3>
                               <p className="text-xs text-muted-foreground">
-                                Unit Tingkat 1 (Root) · {rootMembers.length} panitia aktif
+                                Unit tingkat 1, {rootMembers.length} panitia aktif
                               </p>
                             </div>
                           </div>
@@ -1392,7 +1452,7 @@ export function CommitteeWorkspaceClient({
                                                       className="rounded-xs border border-amber-200 bg-amber-50/30 p-2 text-xs"
                                                     >
                                                       <span className="font-montserrat font-bold text-amber-950">
-                                                        {lvl4Unit.name} (Lvl 4):
+                                                        {lvl4Unit.name} (Tingkat 4):
                                                       </span>{" "}
                                                       {lvl4Members.length > 0 ? (
                                                         lvl4Members.map((m) => (
@@ -1442,27 +1502,28 @@ export function CommitteeWorkspaceClient({
                 {editingUnit ? "Edit Unit Panitia" : "Tambah Unit Panitia"}
               </DialogTitle>
               <DialogDescription>
-                Tentukan nama unit, hierarki induk (maksimal 4 level), dan urutan tampilan.
+                Atur nama, induk, dan urutan unit.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              <AdminField label="Unit Induk (Parent)" hint="Kosongkan jika ini adalah unit tingkat utama (Root).">
-                <select
+              <AdminField label="Unit induk" hint="Kosongkan untuk unit tingkat utama.">
+                <AdminSelect
+                  aria-label="Pilih unit induk"
                   value={unitParentId}
-                  onChange={(e) => setUnitParentId(e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-                >
-                  <option value="">— Unit Utama (Level 1 Root) —</option>
-                  {flatTree
-                    .filter((u) => !editingUnit || u.id !== editingUnit.id)
-                    .filter((u) => u.level < 4) // Only allow parents if level < 4
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {"—".repeat(u.level - 1)} {u.name} (Lvl {u.level})
-                      </option>
-                    ))}
-                </select>
+                  onValueChange={setUnitParentId}
+                  className="h-9 w-full text-xs"
+                  options={[
+                    { value: "", label: "Unit utama (tingkat 1)" },
+                    ...flatTree
+                      .filter((u) => !editingUnit || u.id !== editingUnit.id)
+                      .map((u) => ({
+                        value: u.id,
+                        label: <>{"  ".repeat(u.level - 1)}{u.name} (Tingkat {u.level})</>,
+                        disabled: disabledParentUnitIds.has(u.id),
+                      })),
+                  ]}
+                />
               </AdminField>
 
               <AdminField label="Nama Unit Panitia" hint="Contoh: Panitia Inti, Divisi Acara, Seksi Logistik.">
@@ -1486,11 +1547,9 @@ export function CommitteeWorkspaceClient({
 
                 <AdminField label="Status Unit">
                   <label className="flex h-9 cursor-pointer items-center gap-2 text-xs font-medium text-foreground">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={unitActive}
-                      onChange={(e) => setUnitActive(e.target.checked)}
-                      className="size-4 rounded-sm border-input text-dgb focus:ring-dgb"
+                      onCheckedChange={(checked) => setUnitActive(checked === true)}
                     />
                     Unit Aktif
                   </label>
@@ -1539,21 +1598,20 @@ export function CommitteeWorkspaceClient({
 
             <div className="space-y-4 py-4">
               <AdminField label="Unit Panitia">
-                <select
+                <AdminSelect
+                  aria-label="Pilih unit panitia"
                   value={memberUnitId}
-                  onChange={(e) => setMemberUnitId(e.target.value)}
+                  onValueChange={setMemberUnitId}
                   required
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-                >
-                  <option value="" disabled>
-                    Pilih Unit Panitia
-                  </option>
-                  {flatTree.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {"—".repeat(u.level - 1)} {u.name} (Lvl {u.level})
-                    </option>
-                  ))}
-                </select>
+                  className="h-9 w-full text-xs"
+                  options={[
+                    { value: "", label: "Pilih unit panitia" },
+                    ...flatTree.map((u) => ({
+                      value: u.id,
+                      label: <>{"  ".repeat(u.level - 1)}{u.name} (Tingkat {u.level})</>,
+                    })),
+                  ]}
+                />
               </AdminField>
 
               {/* Person Selector with Quick Create Button */}
@@ -1562,33 +1620,34 @@ export function CommitteeWorkspaceClient({
                   <span className="block text-xs font-semibold text-foreground">
                     Profil Orang <span className="text-destructive">*</span>
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setQuickPersonOpen(true)}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-dgb hover:underline"
+                    className="h-auto rounded-none px-0 py-0 text-[11px] font-semibold text-dgb hover:underline"
                   >
                     <Plus size={12} /> Buat profil baru
-                  </button>
+                  </Button>
                 </div>
 
-                <select
-                  value={memberPersonId}
-                  onChange={(e) => setMemberPersonId(e.target.value)}
-                  required
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-xs text-foreground focus:border-dgb focus:outline-hidden focus:ring-1 focus:ring-dgb"
-                >
-                  <option value="" disabled>
-                    Pilih Profil Orang
-                  </option>
-                  {peopleList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.shortBio ? `(${p.shortBio})` : ""}
-                    </option>
-                  ))}
-                </select>
+                  <AdminSelect
+                    aria-label="Pilih profil orang"
+                    value={memberPersonId}
+                    onValueChange={setMemberPersonId}
+                    required
+                    className="h-9 w-full text-xs"
+                    options={[
+                      { value: "", label: "Pilih profil orang" },
+                      ...peopleList.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} ${p.shortBio ? `(${p.shortBio})` : ""}`,
+                      })),
+                    ]}
+                  />
               </div>
 
-              <AdminField label="Jabatan Panitia (Title)" hint="Contoh: Ketua Pelaksana, Koordinator Acara, Staff Logistik.">
+              <AdminField label="Jabatan" hint="Contoh: Ketua Pelaksana atau Koordinator Acara.">
                 <AdminInput
                   value={memberTitle}
                   onChange={(e) => setMemberTitle(e.target.value)}
@@ -1609,11 +1668,9 @@ export function CommitteeWorkspaceClient({
 
                 <AdminField label="Status Penugasan">
                   <label className="flex h-9 cursor-pointer items-center gap-2 text-xs font-medium text-foreground">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={memberActive}
-                      onChange={(e) => setMemberActive(e.target.checked)}
-                      className="size-4 rounded-sm border-input text-dgb focus:ring-dgb"
+                      onCheckedChange={(checked) => setMemberActive(checked === true)}
                     />
                     Penugasan Aktif
                   </label>

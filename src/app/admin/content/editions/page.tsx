@@ -31,7 +31,7 @@ export default async function EditionsPage() {
           <AdminCard>
             <AdminCardHeader eyebrow="Kategori peserta" title="Tambah kategori" description="Kode digunakan untuk navigasi dan pengelompokan peserta." />
             <form action={createCategoryAction} className="grid gap-4 sm:grid-cols-2">
-              <AdminField label="Edisi"><AdminSelect name="editionId" required><option value="">Pilih edisi</option>{rows.map((edition) => <option key={edition.id} value={edition.id}>{edition.name}</option>)}</AdminSelect></AdminField>
+              <AdminField label="Edisi"><AdminSelect name="editionId" required options={[{ value: "", label: "Pilih edisi" }, ...rows.map((edition) => ({ value: edition.id, label: edition.name }))]} /></AdminField>
               <AdminField label="Kode"><AdminInput name="code" placeholder="JD" required /></AdminField>
               <AdminField label="Label"><AdminInput name="label" placeholder="Jajaka Dewasa" required /></AdminField>
               <AdminField label="Slug"><AdminInput name="slug" placeholder="jajaka-dewasa" required /></AdminField>

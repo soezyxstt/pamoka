@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ export const adminTextareaClassName =
   "min-h-28 w-full rounded-md border border-input bg-background px-3 py-2.5 text-sm text-foreground shadow-none outline-none transition-colors placeholder:text-muted-foreground focus:border-dgb-300 focus:ring-2 focus:ring-dgb-100 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground";
 
 export function AdminPage({
+  eyebrow,
   title,
   description,
   action,
@@ -28,14 +29,18 @@ export function AdminPage({
   children: ReactNode;
 }) {
   return (
-    <main className="relative isolate min-h-[calc(100vh-4rem)] overflow-hidden bg-background px-4 py-7 sm:px-6 md:py-10 lg:px-8">
-      <div className="pointer-events-none absolute -right-24 top-8 -z-10 size-[32rem] bg-[url(/logogram-dg.png)] bg-contain bg-center bg-no-repeat opacity-[0.035]" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-48 bg-linear-to-b from-dgb-50/80 to-transparent" />
+    <main className="min-h-[calc(100vh-4rem)] bg-background px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
       <div className="mx-auto w-full max-w-[1440px]">
-        <header className="mb-8 border-b border-dgb-100 pb-6 sm:pb-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="font-montserrat text-3xl font-semibold leading-tight tracking-[-0.035em] text-dgb-900 sm:text-4xl">{title}</h1>
+        <header className="mb-6 border-b border-border/70 pb-4 sm:mb-7 sm:pb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 max-w-3xl">
+              {eyebrow ? (
+                <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-fb-600">
+                  <span className="h-3 w-0.5 bg-fb" aria-hidden="true" />
+                  {eyebrow}
+                </p>
+              ) : null}
+              <h1 className="font-montserrat !text-2xl font-semibold leading-tight tracking-[-0.03em] text-dgb-900 sm:!text-3xl">{title}</h1>
               {description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
             </div>
             {action ? <div className="shrink-0">{action}</div> : null}
@@ -47,11 +52,13 @@ export function AdminPage({
   );
 }
 
-export function AdminCard({ className, ...props }: React.ComponentProps<typeof Card>) {
-  return <Card className={cn("rounded-none border-0 border-t border-dgb-100 bg-transparent px-0 py-5 text-card-foreground shadow-none sm:py-6", className)} {...props} />;
+export function AdminCard({ className, padding = "default", ...props }: React.ComponentProps<typeof Card> & { padding?: "default" | "none" }) {
+  // Cards own their interior spacing by default; full-bleed callers opt out with p-0 and gap-0.
+  return <Card className={cn("gap-0 rounded-xl border border-dgb-100 bg-card text-card-foreground shadow-none", padding === "none" ? "p-0" : "p-5 sm:p-6", className)} {...props} />;
 }
 
 export function AdminCardHeader({
+  eyebrow,
   title,
   description,
   action,
@@ -64,6 +71,7 @@ export function AdminCardHeader({
   return (
     <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="max-w-2xl">
+        {eyebrow ? <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-fb-600">{eyebrow}</p> : null}
         <h2 className="font-montserrat text-lg font-semibold leading-snug text-dgb-900">{title}</h2>
         {description ? <p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p> : null}
       </div>
@@ -84,10 +92,6 @@ export function AdminField({ label, hint, children, className }: { label: string
 
 export function AdminInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <Input className={cn(adminInputClassName, className)} {...props} />;
-}
-
-export function AdminSelect({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cn(adminInputClassName, "appearance-auto", className)} {...props} />;
 }
 
 export function AdminTextarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -214,4 +218,6 @@ export {
   type MediaAssetSummary,
   type MediaFolderSummary,
 } from "./media-picker";
+
+export { AdminSelect, type AdminSelectOption, type AdminSelectProps } from "./admin-select";
 

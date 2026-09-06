@@ -27,7 +27,7 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 | **009** | Make voting campaigns, tallies, visibility, and results manageable | `src/app/admin/voting/*` | **DONE** | Pengelolaan kampanye voting, input manual harian QRIS merchant, dan validasi WIB. |
 | **010** | Import 2025 content, run end-to-end QA, and perform a reversible cutover | `docs/runbooks/cms-cutover.md` | **IN PROGRESS (Not Authorized)** | Import massal dan cutover publik ditangguhkan hingga disetujui operator. |
 | **011** | Unify public and admin design, media navigation, and annual CMS context | `src/components/admin/*` | **DONE** | Penyelarasan token visual admin dengan public design tokens (Montserrat, `dgb`, `fb`). |
-| **012** | Admin CMS PAMOKA Berbasis Edisi | `plans/admin-page-overhaul.md` | **DONE** | Overhaul menyeluruh UX admin: selector edisi header, sidebar collapsible, media picker reusable, TipTap WYSIWYG, kepengurusan/panitia terstruktur, dan dedicated gallery. |
+| **012** | Admin CMS PAMOKA Berbasis Edisi | `plans/admin-page-overhaul.md` | **IN PROGRESS (Rework)** | Rework UX admin bertahap dengan checkpoint supervisor; fondasi visual dan navigasi sedang ditata ulang sebelum modul fungsional berikutnya. |
 
 ---
 
@@ -97,21 +97,51 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
   9. Manajemen media peserta multi-role (`closeup`, `full_body`, `detail`, `karantina`, `other`) dan sinkronisasi QRIS voting.
   10. Dedicated gallery workspace dengan dukungan album standalone maupun album acara.
   11. Dashboard indikator kesiapan (readiness overview) edisi aktif.
-- **Status**: Selesai (Seluruh 12 Checkpoint 0 sampai 11 telah diimplementasikan dan diverifikasi).
+- **Status**: IN PROGRESS (Rework supervisor-gated). Implementasi baseline tetap dipertahankan; checkpoint rework ditinjau bertahap sebelum modul berikutnya dikerjakan.
 
 ---
 
 ## Rangkuman Checkpoint Plan 012
 
 - **Checkpoint 0**: Pulihkan baseline plan dan kunci ruang lingkup. **(DONE)**
-- **Checkpoint 1**: Selector edisi dan sidebar collapsible. **(DONE)**
-- **Checkpoint 2**: Media picker dan folder edisi. **(DONE)**
-- **Checkpoint 3**: Identitas edisi dan aset situs tetap. **(DONE)**
-- **Checkpoint 4**: Sponsor. **(DONE)**
-- **Checkpoint 5**: Berita WYSIWYG dan live preview. **(DONE)**
-- **Checkpoint 6**: Kepengurusan global dan direktori profil. **(DONE)**
-- **Checkpoint 7**: Panitia per edisi. **(DONE)**
-- **Checkpoint 8**: Mojang Jajaka. **(DONE)**
-- **Checkpoint 9**: Acara dan dedicated gallery workspace. **(DONE)**
-- **Checkpoint 10**: Voting dan dashboard edition-scoped. **(DONE)**
-- **Checkpoint 11**: Cleanup, dokumentasi, dan final verification. **(DONE)**
+- **Checkpoint 1**: Selector edisi dan sidebar collapsible. **(ACCEPTED)**
+- **Checkpoint 1b**: Pemulihan baseline runtime dan kontrak konstanta server. **(ACCEPTED)**
+- **Checkpoint 2A**: Query media berscope edisi, pagination, dan identitas callback upload. **(ACCEPTED)**
+- **Checkpoint 2B.1**: Policy uploader bersama, cap MIME dan ukuran, serta identity callback. **(ACCEPTED)**
+- **Checkpoint 2B.2A**: Integrasi uploader bersama ke picker dan trigger media native. **(ACCEPTED)**
+- **Checkpoint 2B.2B**: Ikon admin semantik dan deskripsi UI ringkas. **(ACCEPTED)**
+- **Checkpoint 2B.3**: Pagination picker, reset sesi, guard respons stale, cache pilihan, dan cakupan folder edisi. **(ACCEPTED, QA dataset nonempty dan 380px OPEN)**
+- **Checkpoint 2B.4**: Sisa library, multi-selection, upload selection, ordered cache, gallery batch picker dengan duplicate filtering, dan responsive source implementation. **(SOURCE ACCEPTED, bukan penerimaan visual; browser dataset nonempty, runtime upload, true FormData, dan QA 380px OPEN)**
+- **Checkpoint 1C.1**: Scrollbar admin scoped dan kontrol shell berbasis primitive shadcn. **(ACCEPTED, QA 380px OPEN)**
+- **Checkpoint 1C.2**: Migrasi `AdminSelect` ke Select Radix dan seluruh caller. **(ACCEPTED, QA 380px, true FormData, dan runtime required-error flow OPEN)**
+- **Checkpoint 1C.3A**: Migrasi select, input, textarea, dan tombol aksi yang masih raw ke primitive shadcn/Admin wrapper. **(ACCEPTED, raw button 0, native select 0, visible raw input 0)**
+- **Checkpoint 1C.3B**: Migrasi checkbox dan radio admin. **(ACCEPTED, 7 checkbox native dimigrasikan; 11 hidden dan 2 file tetap sebagai exception terencana)**
+- **Checkpoint 1C.4**: Audit scrollbar admin selain shell. **(ACCEPTED, runtime visual dan QA 380px OPEN)**
+- **Checkpoint 3**: Identitas edisi dan aset situs tetap. **(SOURCE DAN DESKTOP ACCEPTED, QA 380px OPEN)**
+- **Checkpoint 4**: Sponsor. **(SOURCE DAN DESKTOP ACCEPTED, QA DATASET NONEMPTY DAN 380px OPEN)**
+- **Checkpoint 5**: Berita WYSIWYG dan live preview. **(SOURCE DAN DESKTOP ACCEPTED, AUTOSAVE DATASET NONEMPTY DAN QA VIEWPORT 380px OPEN)**
+- **Checkpoint 6**: Kepengurusan global dan direktori profil. **(SOURCE DAN DESKTOP ACCEPTED, QA DETAIL DATASET NONEMPTY DAN 380px OPEN)**
+- **Checkpoint 7**: Panitia per edisi. **(SOURCE ACCEPTED, RUNTIME VISUAL DAN QA 380px OPEN)**
+- **Checkpoint 8A**: Fondasi alur seleksi dinamis. **(SOURCE ACCEPTED, MIGRATION TARGET BELUM DITERAPKAN)**
+- **Checkpoint 8B**: Pendaftar manual, pengaturan stage, dan workspace seleksi. **(SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN)**
+- **Checkpoint 8C**: Profil peserta, media, QRIS, dan gelar. **(SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN)**
+- **Checkpoint 9**: Acara dan dedicated gallery workspace. **(SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN)**
+- **Checkpoint 10**: Voting dan dashboard edition-scoped. **(SOURCE ACCEPTED, RUNTIME VISUAL 380px OPEN)**
+- **Checkpoint 11**: Cleanup, dokumentasi, dan final verification. **(SOURCE ACCEPTED, RUNTIME QA OPEN)**
+- Keputusan CP2B.3: picker memakai cakupan edisi aktif sebagai default bila folder tersedia; folder upload tetap mengikuti pilihan pengguna dan tidak dibuat atau dipilih otomatis.
+- Keputusan CP1C: scrollbar kustom hanya scoped pada shell admin; voting tersedia untuk setiap edisi dengan data tetap terisolasi.
+- Keputusan CP1C.2: kontrol `AdminSelect` memakai wrapper Select Radix lokal dengan satu bridge form yang validatable; nilai kosong tetap `""` dan sentinel internal tidak masuk FormData.
+- Keputusan CP1C.3B: Checkbox lokal berbasis Radix mempertahankan checked state, label, disabled state, dan semantics FormData melalui name/value pada BubbleInput; 7 checkbox native admin sudah dimigrasikan. Sisa 11 hidden input dan 2 file input tetap diizinkan. QA 380px, runtime visual, true FormData, dan runtime required-error flow tetap OPEN/PENDING.
+- Keputusan CP1C.4: Scrollbar native pada shell content dan container admin eksplisit memakai helper `adminNativeScrollbarClassName`; sidebar tetap memakai `AdminScrollArea` dark. Runtime visual dan QA 380px tetap OPEN/PENDING.
+- Keputusan CP3: identitas edisi memakai form logo dan slogan yang ringkas, indikator kelengkapan 3 bagian, dialog program unggulan, serta pengurutan yang aman. Aset situs memakai 24 slot manifest tetap yang dikelompokkan dalam accordion per halaman; key internal tidak ditampilkan dan public route tetap tidak berubah. Typecheck, lint tanpa error, 8 focused tests, dan QA desktop diterima. QA 380px masih OPEN karena browser responsif tidak memiliki sesi admin.
+- Keputusan alur Pasanggiri: pendaftar dimasukkan admin secara manual dari Google Form. Stage dibuat dinamis per edisi, linear, dan memakai target jumlah total lintas kategori. Sistem hanya mencatat keputusan lolos atau tidak lolos. Tahap final dipilih admin, gelar dibuat per edisi dengan capacity, dan satu peserta dapat menerima beberapa gelar. QRIS hanya berupa gambar eksternal yang diunggah atau dibind. Kampanye voting memilih stage, membuat snapshot peserta saat dimulai, lalu dimulai dan ditutup manual.
+- Keputusan CP4: sponsor memakai daftar full-width, filter shadcn, Sheet ringkas, media picker gambar, dan pratinjau tanpa simbol dekoratif. Sponsor baru selalu disimpan nonaktif. Aktivasi memerlukan `content.publish`, sedangkan editor tetap dapat menonaktifkan sponsor. Typecheck, lint tanpa error, 5 focused tests, dan QA desktop dataset kosong diterima. QA daftar berisi data dan 380px tetap OPEN.
+- Keputusan CP5: berita memakai editor TipTap dengan heading 2 dan 3, pemformatan dasar, gambar dari pustaka media, autosave version-safe, revisi, serta pratinjau desktop dan 380 px. Gambar isi dan sampul divalidasi sebagai aset gambar siap pakai pada transaksi simpan dan terbit. Typecheck, lint tanpa error, 6 focused tests, dan QA visual desktop diterima. Autosave pada artikel nyata, dataset berisi data, upload, dan viewport admin 380 px tetap OPEN.
+- Keputusan CP6: kepengurusan tetap global dengan periode, direktori orang reusable, tree maksimal 4 tingkat, misi terurut, dan penugasan berurutan. Detail periode dapat menghubungkan beberapa edisi tanpa perubahan skema. Pemindahan edisi dari periode lain memerlukan konfirmasi eksplisit yang divalidasi ulang dalam transaksi dan dicatat pada audit log. Typecheck, lint file CP6 tanpa temuan, 8 focused tests, serta QA desktop halaman daftar dan form periode diterima. QA detail dengan dataset berisi data dan viewport 380 px tetap OPEN.
+- Keputusan CP7: panitia tetap terisolasi oleh selector edisi. Action tree menolak ID ganda, ID hilang, urutan negatif, serta pengurutan lintas induk. Penghapusan penugasan memakai versi optimistik dan seluruh write tetap memakai transaksi serta audit. Workspace memakai tabel shadcn, kontrol keyboard, aksi tree responsif, istilah Indonesia, dan profil reusable yang dapat dibuat inline. Typecheck, lint file CP7 tanpa temuan, dan 4 focused tests lulus. Runtime visual dan QA 380 px tetap OPEN karena sesi browser QA tidak terautentikasi.
+- Keputusan CP8A: skema seleksi dinamis bersifat additive dan mempertahankan `participants.stage`, `paymentUrl`, serta seluruh public reader lama. Tahap aktif peserta dan tahap kelayakan kampanye memakai relasi restrict sehingga tahap yang masih digunakan tidak dapat dihapus. Entry tahap lama dan referensi sumber snapshot dibersihkan atau dilepas hanya setelah keterkaitan aktif dilepas. Backfill idempotent membuat tahap per pasangan edisi dan nilai tahap lama, menandai entry `pending` dengan catatan perlu ditinjau, mempertahankan field kompatibilitas, serta menulis audit. Migrasi `0013_married_bloodscream.sql`, `db:check`, typecheck, dan 8 focused tests lulus. Migrasi dan backfill belum diterapkan ke database operator mana pun.
+- Keputusan CP9: acara dan album dikelola pada halaman terpisah berbasis edisi. Album umum tidak memerlukan acara, sedangkan album acara memvalidasi owner pada edisi aktif. Item foto dan YouTube ditambahkan ke album yang sedang dibuka, mutation diserialisasi per album, dan constraint `gallery_item_exactly_one_source` menjaga satu sumber per item. `db:check`, typecheck, lint file CP9 tanpa error, dan 6 focused tests lulus. Migrasi `0014_burly_sprite.sql` belum diterapkan dan runtime visual 380 px tetap OPEN.
+- Keputusan CP8B: operasi pendaftar, tahap linear, keputusan massal, rollback, close, reopen, dan delete memakai transaksi, audit, versi optimistik, serta isolasi edisi aktif. Empat route admin menyediakan input manual, daftar tahap, keputusan massal, konfirmasi kuota, dan filter tahap dinamis. Reopen membatalkan promosi hanya saat seluruh entry tahap berikutnya masih pending dan belum dipakai voting atau gelar. Action peserta lama dikunci ke konteks edisi, current optimistic version, dan hard delete hanya untuk pendaftar yang belum diproses. Sebelas focused tests, typecheck, lint file UI, dan scan aturan desain lulus. Runtime visual desktop dan 380 px masih OPEN karena sesi admin tidak terautentikasi.
+- Keputusan CP8C: detail peserta dikunci ke edisi aktif, current stage hanya-baca, media peserta menerima gambar ready dengan satu closeup aktif, dan QRIS hanya memakai gambar eksternal dari pustaka media. Daftar peserta memiliki filter foto, gelar, dan QRIS. Gelar per edisi memakai capacity, versi optimistik, transaksi, audit, serta hanya dapat diberikan kepada peserta yang berada pada tahap final. Satu peserta dapat menerima beberapa gelar. Empat belas focused tests, typecheck, lint file perubahan, dan scan aturan desain lulus. Runtime visual desktop dan 380 px masih OPEN.
+- Keputusan CP10: kampanye voting memakai tahap sumber dinamis dari edisi aktif dan membuat snapshot peserta saat dimulai manual. Tally hanya menerima peserta snapshot dengan gambar QRIS siap pakai, tanggal WIB yang sah, versi optimistik, transaksi, dan audit. Dashboard memakai 10 indikator kesiapan edisi serta informasi periode kepengurusan global. Lima focused tests, typecheck, dan lint file CP10 lulus. Runtime visual, true FormData, dataset browser nonempty, dan viewport 380 px masih OPEN.
+- Keputusan CP11: rute Pages dan People dipertahankan sebagai redirect kompatibilitas, overview Konten menjadi daftar ringkas, dan lima implementasi legacy tanpa caller dihapus. Runbook mencatat pemilihan edisi dan pemetaan field lama tanpa penghapusan data. `db:check`, 72 tests, typecheck, lint tanpa error baru, build 36 halaman, scan aturan desain, dan `git diff --check` lulus. Runtime QA terautentikasi tetap OPEN.

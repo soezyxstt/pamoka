@@ -20,18 +20,21 @@ Bar atas (header) admin dilengkapi dengan **Selector Edisi Aktif**:
 - Memilih edisi di header akan mengisolasi ruang kerja admin ke tahun yang dipilih (misal: *Pasanggiri MOKA 2025* atau *2026*).
 - Modul-modul berbasis edisi (Identitas, Aset Situs, Sponsor, Berita, Panitia, Mojang Jajaka, Acara, Galeri, dan Voting) otomatis menyesuaikan data dengan edisi aktif.
 - Modul global yang berlaku lintas tahun: **Kepengurusan Organisasi** (`/admin/organization`), **Pustaka Media** (`/admin/media`), **Manajemen Pengguna** (`/admin/users`), dan **Audit Log** (`/admin/audit`).
+- Pilihan di formulir memakai kontrol Select yang dapat dinavigasi dengan keyboard; nilai kosong tetap dikirim sebagai nilai kosong.
 
 ---
 
 ## 3. Dashboard & Kesiapan Konten Edisi (Readiness Checklist)
 
 Halaman utama dashboard (`/admin`) menyediakan ikhtisar terpadu:
-1. **Statistik Utama**: Menampilkan jumlah Finalis Aktif, Berita Published, dan Sponsor Terdaftar untuk edisi terpilih.
-2. **Panel Kesiapan Konten (Readiness Checklist)**: Memantau 8 indikator kesiapan sebelum peluncuran edisi:
+1. **Statistik Utama**: Menampilkan edisi terpilih, jumlah peserta aktif, berita, dan sponsor.
+2. **Panel Kesiapan Konten (Readiness Checklist)**: Memantau 10 indikator kesiapan sebelum peluncuran edisi:
    - **Identitas Edisi**: Kelengkapan logo resmi (1:1) dan slogan Pasanggiri.
-   - **Aset Situs Tetap**: Keterisian slot banner/hero publik (7 slot).
+   - **Program Unggulan**: Program yang ditampilkan untuk edisi aktif.
+   - **Aset Situs Tetap**: Keterisian seluruh slot wajib pada manifest aset.
    - **Struktur Panitia**: Susunan panitia pelaksana edisi.
-   - **Finalis Pasanggiri**: Peserta berstatus finalis aktif.
+   - **Peserta Pasanggiri**: Peserta aktif dan kesiapan tahap seleksi edisi.
+   - **Rangkaian Acara**: Agenda kegiatan edisi aktif.
    - **Kampanye Voting**: Kampanye voting kameumeut edisi aktif.
    - **Sponsor & Mitra**: Partner pendukung edisi.
    - **Berita Editorial**: Artikel yang telah dipublikasikan.
@@ -53,12 +56,12 @@ Menu **Identitas Edisi** (`/admin/content/edition-settings`) mengelola brand dan
 
 ## 5. Aset Situs Tetap
 
-Menu **Aset Situs Tetap** (`/admin/content/site-assets`) mengelola penempatan media pada 7 slot visual tetap halaman publik (Beranda, Tentang, dan Kategori):
-1. Pilih tab halaman tujuan (**Beranda**, **Tentang**, atau **Kategori**).
-2. Setiap kartu slot menampilkan nama bagian, kunci slot, jenis media yang diizinkan (gambar/video), rasio yang disarankan, dan status keterisian.
+Menu **Aset Situs Tetap** (`/admin/content/site-assets`) mengelola penempatan media pada 24 slot visual tetap untuk Beranda, Tentang, dan halaman kategori:
+1. Buka kelompok halaman yang ingin diubah. Hanya satu kelompok ditampilkan agar halaman tetap ringkas.
+2. Setiap kartu slot menampilkan nama bagian, jenis media, rasio, status keterisian, dan pratinjau.
 3. Gunakan tombol **Pilih media** untuk memilih dari pustaka atau mengunggah file baru.
 4. Anda dapat menyesuaikan **Alt text khusus slot** dan titik fokus gambar (Fokus X dan Y dalam persentase 0 hingga 100).
-5. Tombol **Lepas slot** mengosongkan slot terpilih tanpa menghapus file asli dari pustaka media.
+5. Tombol **Lepas media** mengosongkan slot terpilih tanpa menghapus file asli dari pustaka media.
 6. Tidak tersedia tombol penambahan slot sembarangan guna menjaga integritas desain situs publik.
 
 ---
@@ -70,27 +73,32 @@ Menu **Sponsor** (`/admin/content/sponsors`) mengelola partner pendukung acara:
 2. **Pencarian & Filter**: Saring berdasarkan nama, tier, atau status aktif/nonaktif.
 3. **Logo & Pratinjau**: Pilih logo sponsor dan lihat simulasi kartu mini secara live.
 4. **Urutan Tampil**: Atur nomor urut penampilan (display order) untuk menentukan posisi di situs publik.
+5. **Penerbitan**: Sponsor baru selalu disimpan nonaktif. Pengguna dengan izin penerbitan dapat mengaktifkannya setelah data diperiksa.
 
 ---
 
-## 7. Berita & Editorial (WYSIWYG TipTap)
+## 7. Berita dan Editorial
 
 Menu **Berita** (`/admin/content/news`) menyediakan studio penulisan cerita dan dokumentasi resmi:
-1. **Editor TipTap Kaya Fitur**: Mendukung pemformatan teks lengkap (Heading 2-4, Bold, Italic, Strikethrough, Bullet/Numbered List, Blockquote, Divider, Image inline).
-2. **Unggah & Sisip Gambar**: Sisipkan gambar langsung dari Pustaka Media atau unggah aset baru langsung ke dalam artikel.
-3. **Autosave Draft**: Draf tersimpan otomatis ke database setiap beberapa detik untuk mencegah kehilangan data.
-4. **Live Split Preview**: Kolom kanan menampilkan pratinjau artikel publik dengan tipografi Montserrat & Inter secara real-time.
-5. **Siklus Publikasi**: Kontrol status artikel (`draft`, `published`, `archived`) dengan pencatatan tanggal tayang (`publishedAt`).
+1. **Tulis berita**: Isi judul, alamat berita, ringkasan, dan foto sampul.
+2. **Atur isi**: Gunakan paragraf, heading 2 atau 3, tebal, miring, tautan, daftar, kutipan, dan gambar.
+3. **Pilih media**: Gunakan gambar dari Pustaka Media. Pengguna dengan izin pengelolaan media juga dapat mengunggah aset baru.
+4. **Simpan otomatis**: Draft disimpan setelah perubahan berhenti sejenak. Indikator di bagian atas menunjukkan status penyimpanan.
+5. **Periksa tampilan**: Pilih Editor, Keduanya, atau Pratinjau. Pratinjau tersedia dalam simulasi desktop dan 380 px.
+6. **Terbitkan**: Foto sampul, ringkasan, dan isi wajib lengkap. Riwayat revisi tetap tersedia untuk pemulihan.
 
 ---
 
 ## 8. Kepengurusan Organisasi (Global)
 
 Menu **Kepengurusan** (`/admin/organization`) mengelola struktur kepengurusan PAMOKA lintas periode:
+
 1. **Multi-Tab**: Terbagi menjadi tab *Periode Kepengurusan*, *Direktori Profil*, dan *Perlu Dipetakan*.
 2. **Struktur Organisasi Bertingkat (Tree)**: Kelola unit organisasi hierarkis (hingga 4 level kedalaman: Dewan Pembina, Pengurus Harian, Bidang, Divisi).
 3. **Penugasan Pengurus**: Hubungkan orang dari Direktori Profil ke unit organisasi dengan jabatan tertentu.
 4. **Direktori Orang Bersama**: Profil orang (nama, bio, media sosial, foto) dapat digunakan kembali untuk kepengurusan berbagai periode maupun kepanitiaan edisi.
+5. **Edisi Terhubung**: Buka detail periode lalu pilih **Atur** pada bagian Edisi terhubung. Satu periode dapat memiliki beberapa edisi. Jika edisi masih terhubung ke periode lain, centang konfirmasi pemindahan sebelum menyimpan.
+6. **Visi dan Misi**: Buka **Edit metadata periode** untuk memperbarui visi serta menambah, menghapus, atau mengurutkan poin misi.
 
 ---
 
@@ -103,39 +111,49 @@ Menu **Panitia** (`/admin/content/committee`) mengelola susunan panitia pelaksan
 
 ---
 
-## 10. Mojang Jajaka (Peserta & Finalis)
+## 10. Mojang Jajaka dan Seleksi
 
 Menu **Mojang Jajaka** (`/admin/content/participants`) mengelola peserta Pasanggiri:
-1. **Kategori Standar**: Terbagi dalam 4 kategori baku: `JD` (Jajaka Dewasa), `MD` (Mojang Dewasa), `JR` (Jajaka Remaja), `MR` (Mojang Remaja).
-2. **Tahap Seleksi**: Status peserta (`audisi`, `semifinalis`, `finalis`).
-3. **Editor Detail Peserta** (`/admin/content/participants/[id]`):
+1. **Atur Tahap**: Buka `/admin/content/participants/stages`, buat alur dari tahap pertama sampai tahap final, lalu buka tahap pertama.
+2. **Input Manual**: Buka `/admin/content/participants/new` untuk memasukkan pendaftar dari Google Form. Pendaftar otomatis masuk ke tahap pertama.
+3. **Workspace Seleksi**: Buka satu tahap untuk menetapkan `Lolos` atau `Tidak lolos`. Semua peserta harus memiliki keputusan sebelum tahap ditutup.
+4. **Pemulihan**: Keputusan dapat di-rollback dengan alasan. Tahap tertutup dapat dibuka kembali hanya jika tahap berikutnya belum diproses.
+5. **Kategori Standar**: Peserta memakai kategori baku `JD`, `MD`, `JR`, atau `MR`.
+6. **Tahap Dinamis**: Target berlaku untuk seluruh kategori. Sistem tidak menyimpan nilai tes atau ranking.
+7. **Tahap Final dan Gelar**: Buka `/admin/content/participants/titles` untuk membuat gelar, mengatur jumlah slot, dan menyematkannya kepada peserta tahap final. Satu peserta dapat menerima beberapa gelar.
+8. **Penghapusan Tahap**: Tahap yang masih dipakai peserta atau voting tidak dapat dihapus.
+9. **Editor Detail Peserta** (`/admin/content/participants/[id]`):
    - **Identitas & Kategori**: Nomor urut, nama lengkap, slug profil, dan bio ringkas.
    - **Prestasi**: Daftar capaian dan prestasi dengan tombol pengurut naik/turun.
    - **Sosial Media**: Tautan akun Instagram, TikTok, YouTube, LinkedIn, dll.
    - **Galeri Multi-Role**: Foto dikelompokkan berdasarkan peran (`Closeup`, `Full Body`, `Detail Busana`, `Karantina`, `Lainnya`). Foto Closeup otomatis tersinkronisasi ke foto profil utama.
-   - **QRIS & Voting**: Upload barcode QRIS pembayaran (rasio 1:1) dan tautan e-wallet alternatif.
-4. **Live Preview**: Pratinjau kartu finalis publik secara langsung saat mengedit.
+   - **QRIS dan Voting**: QRIS dibuat di luar sistem, lalu gambarnya diunggah atau dipilih dari Pustaka Media.
+10. **Live Preview**: Pratinjau kartu peserta secara langsung saat mengedit.
 
 ---
 
-## 11. Acara & Galeri Dokumentasi
+## 11. Acara dan galeri
 
-Menu **Rangkaian Acara** (`/admin/content/events`) & **Galeri** (`/admin/content/galleries`):
-1. **Rangkaian Acara**: Kelola agenda kegiatan (Audisi, Karantina, Malam Bakat, Grand Final) dengan banner sampul hero dan urutan kegiatan.
-2. **Album Galeri**:
-   - **Tipe Album**: Mendukung album *Standalone* (kegiatan umum) atau *Terkait Acara* (terhubung ke salah satu agenda acara).
-   - **Item Foto & Video**: Tambahkan banyak foto sekaligus dari Pustaka Media atau sematkan video YouTube dengan ID/URL.
-   - **Live Split Preview**: Pratinjau album dengan bilah indeks album di sisi kiri dan tata letak grid media responsif.
+Menu **Rangkaian acara** (`/admin/content/events`) mengelola nama, slug, deskripsi, foto hero, status, dan urutan acara pada edisi aktif. Buka detail acara untuk melihat album terkait atau membuat album baru yang langsung terhubung.
+
+Menu **Galeri** (`/admin/content/galleries`) menyediakan dua tipe album:
+
+1. **Umum**: album tidak terkait acara.
+2. **Terkait acara**: album hanya dapat memilih acara dari edisi aktif.
+
+Di dalam album, admin dapat memilih beberapa foto dari Pustaka Media, menambahkan video YouTube, mengubah keterangan, dan mengatur urutan. Setiap item hanya memiliki satu sumber. Pratinjau menampilkan indeks album dan susunan medianya.
 
 ---
 
 ## 12. Operasional Voting Manual
 
 Menu **Voting** (`/admin/voting`) mengelola kampanye voting kameumeut:
-1. **Isolasi Kampanye**: Kampanye voting hanya memuat finalis aktif dari edisi yang dipilih.
-2. **Input Transaksi Harian**: Masukkan akumulasi pemasukan harian dari dashboard merchant QRIS untuk tiap finalis dan tanggal tertentu.
-3. **Kalkulasi Poin Otomatis**: Poin voting dihitung otomatis dari nominal rupiah dibagi harga per poin (pembulatan ke bawah).
-4. **Visibilitas Hasil**: Tombol sakelar untuk menampilkan atau menyembunyikan hasil perolehan voting di situs publik.
+1. **Buat Kampanye**: Pilih tahap sumber dari edisi aktif. Tahap final dipilih otomatis bila tersedia.
+2. **Mulai Manual**: Ketik nama kampanye dan alasan. Sistem membekukan daftar peserta tahap sebagai snapshot.
+3. **Siapkan QRIS**: Unggah atau pilih gambar QRIS eksternal pada profil peserta. PDF dan media yang belum siap tidak dapat menerima tally.
+4. **Catat Tally**: Pilih peserta snapshot dan tanggal, lalu masukkan akumulasi pemasukan harian dari dashboard merchant QRIS.
+5. **Tampilkan Hasil**: Ubah visibilitas dengan alasan. Kampanye draf belum dapat ditampilkan.
+6. **Tutup Manual**: Tutup kampanye dengan nama dan alasan. Tally terkunci setelah kampanye ditutup.
 
 ---
 

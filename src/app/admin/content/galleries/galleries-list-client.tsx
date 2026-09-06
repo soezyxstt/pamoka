@@ -19,6 +19,7 @@ import {
   AdminBadge,
   AdminCard,
   AdminEmptyState,
+  AdminSelect,
 } from "@/components/admin/primitives";
 import {
   AlertDialog,
@@ -45,6 +46,7 @@ export type GalleryListItem = {
   displayOrder: number;
   status: string;
   active: boolean;
+  version: number;
   coverUrl: string | null;
   coverAlt: string | null;
   itemCount: number;
@@ -101,7 +103,10 @@ export function GalleriesListClient({
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await deleteGalleryAction({ id: deleteTarget.id });
+      await deleteGalleryAction({
+        id: deleteTarget.id,
+        expectedVersion: deleteTarget.version,
+      });
       setGalleries((prev) => prev.filter((item) => item.id !== deleteTarget.id));
       toast.success(`Album "${deleteTarget.title}" berhasil dihapus`);
       setDeleteTarget(null);
@@ -130,26 +135,30 @@ export function GalleriesListClient({
           </div>
 
           {/* Owner Type Filter */}
-          <select
+          <AdminSelect
+            aria-label="Filter tipe album"
             value={ownerFilter}
-            onChange={(e) => setOwnerFilter(e.target.value as "all" | "standalone" | "event")}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
-          >
-            <option value="all">Semua Tipe Album</option>
-            <option value="standalone">Album Standalone</option>
-            <option value="event">Album Acara</option>
-          </select>
+            onValueChange={(value) => setOwnerFilter(value as "all" | "standalone" | "event")}
+            className="h-9 w-auto min-w-[10rem] text-xs"
+            options={[
+              { value: "all", label: "Semua Tipe Album" },
+              { value: "standalone", label: "Album umum" },
+              { value: "event", label: "Album Acara" },
+            ]}
+          />
 
           {/* Status Filter */}
-          <select
+          <AdminSelect
+            aria-label="Filter status album"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "all" | "published" | "draft")}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
-          >
-            <option value="all">Semua Status</option>
-            <option value="published">Published</option>
-            <option value="draft">Draft</option>
-          </select>
+            onValueChange={(value) => setStatusFilter(value as "all" | "published" | "draft")}
+            className="h-9 w-auto min-w-[9rem] text-xs"
+            options={[
+              { value: "all", label: "Semua Status" },
+              { value: "published", label: "Terbit" },
+              { value: "draft", label: "Draf" },
+            ]}
+          />
         </div>
 
         {canEdit && (
@@ -175,7 +184,7 @@ export function GalleriesListClient({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredGalleries.map((gal) => (
-            <AdminCard key={gal.id} className="flex flex-col justify-between overflow-hidden">
+            <AdminCard key={gal.id} padding="none" className="flex flex-col justify-between overflow-hidden">
               <div>
                 {/* Cover Image */}
                 <div className="relative aspect-video w-full overflow-hidden bg-muted">
@@ -200,7 +209,7 @@ export function GalleriesListClient({
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-md bg-dgb/90 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-xs">
-                        <Globe size={11} /> Standalone
+                        <Globe size={11} /> Umum
                       </span>
                     )}
                   </div>

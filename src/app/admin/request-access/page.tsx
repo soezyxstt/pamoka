@@ -5,6 +5,7 @@ import { Clock3, Send } from "lucide-react";
 import { AdminAuthShell } from "@/components/admin/admin-shell";
 import { AdminButton } from "@/components/admin/primitives";
 import { AdminField, AdminTextarea } from "@/components/admin/primitives";
+import { Checkbox } from "@/components/ui/checkbox";
 import { auth } from "@/server/auth/config";
 import { ensurePendingAdminProfile } from "@/server/auth/authorization";
 import { requestAccessAction } from "./actions";
@@ -32,8 +33,17 @@ export default async function RequestAccessPage() {
               ["voting", "Voting"],
               ["users", "Pengguna"],
             ].map(([value, label]) => (
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3 py-3 text-sm text-foreground transition-colors has-checked:border-fb-300 has-checked:bg-fb-50" key={value}>
-                <input className="accent-fb" name="areas" type="checkbox" value={value} />
+              <label
+                className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3 py-3 text-sm text-foreground transition-colors has-[[data-state=checked]]:border-fb-300 has-[[data-state=checked]]:bg-fb-50"
+                htmlFor={`area-${value}`}
+                key={value}
+              >
+                <Checkbox
+                  id={`area-${value}`}
+                  name="areas"
+                  value={value}
+                  className="border-fb-300 data-[state=checked]:border-fb data-[state=checked]:bg-fb data-[state=checked]:text-white"
+                />
                 {label}
               </label>
             ))}

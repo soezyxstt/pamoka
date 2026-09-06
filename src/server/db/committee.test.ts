@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client/node";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import assert from "node:assert/strict";
@@ -8,20 +8,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { appendAuditLog } from "../auth/audit";
 import * as schema from "./schema";
 import {
-  auditLogs,
-  authUsers,
   committeeAssignments,
   committeeUnits,
   editions,
-  mediaAssets,
   organizationMemberships,
   organizationPeriods,
   organizationUnits,
   people,
-  personSocialLinks,
 } from "./schema";
 
 async function createTestDatabase() {
@@ -96,7 +91,7 @@ test("committeeUnits mendukung struktur tree hierarkis bertingkat per edisi (mak
       .returning();
 
     // Level 4: Sub-seksi Panggung & Sound
-    const [sound] = await db
+    await db
       .insert(committeeUnits)
       .values({
         id: "unit-sound",
@@ -107,8 +102,7 @@ test("committeeUnits mendukung struktur tree hierarkis bertingkat per edisi (mak
         active: true,
         createdAt: now,
         updatedAt: now,
-      })
-      .returning();
+      });
 
     const units = await db
       .select()

@@ -1,4 +1,4 @@
-import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import { AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
@@ -48,6 +48,7 @@ export default async function GalleriesPage(props: GalleriesPageProps) {
       displayOrder: galleries.displayOrder,
       status: galleries.status,
       active: galleries.active,
+      version: galleries.version,
       coverMediaId: galleries.coverMediaId,
       coverUrl: mediaAssets.url,
       coverAlt: mediaAssets.alt,
@@ -58,15 +59,26 @@ export default async function GalleriesPage(props: GalleriesPageProps) {
     .orderBy(asc(galleries.displayOrder));
 
   // Get item counts per gallery
-  const itemCounts = await database
-    .select({
-      galleryId: galleryItems.galleryId,
-      totalCount: sql<number>`count(${galleryItems.id})`.mapWith(Number),
-      photoCount: sql<number>`sum(case when ${galleryItems.mediaId} is not null then 1 else 0 end)`.mapWith(Number),
-      videoCount: sql<number>`sum(case when ${galleryItems.youtubeId} is not null then 1 else 0 end)`.mapWith(Number),
-    })
-    .from(galleryItems)
-    .groupBy(galleryItems.galleryId);
+  const galleryIds = rawGalleries.map((gallery) => gallery.id);
+  const itemCounts =
+    galleryIds.length === 0
+      ? []
+      : await database
+          .select({
+            galleryId: galleryItems.galleryId,
+            totalCount: sql<number>`count(${galleryItems.id})`.mapWith(Number),
+            photoCount:
+              sql<number>`sum(case when ${galleryItems.mediaId} is not null then 1 else 0 end)`.mapWith(
+                Number,
+              ),
+            videoCount:
+              sql<number>`sum(case when ${galleryItems.youtubeId} is not null then 1 else 0 end)`.mapWith(
+                Number,
+              ),
+          })
+          .from(galleryItems)
+          .where(inArray(galleryItems.galleryId, galleryIds))
+          .groupBy(galleryItems.galleryId);
 
   const itemCountMap = new Map<string, { total: number; photo: number; video: number }>();
   for (const row of itemCounts) {
@@ -106,6 +118,7 @@ export default async function GalleriesPage(props: GalleriesPageProps) {
       displayOrder: g.displayOrder,
       status: g.status,
       active: Boolean(g.active),
+      version: g.version,
       coverUrl: g.coverUrl,
       coverAlt: g.coverAlt,
       itemCount: counts.total,
@@ -123,6 +136,7 @@ export default async function GalleriesPage(props: GalleriesPageProps) {
       description={`Kelola album foto dan video dokumentasi untuk ${currentEdition.name} (${currentEdition.year}).`}
     >
       <GalleriesListClient
+        key={currentEdition.id}
         initialGalleries={initialGalleries}
         editionName={currentEdition.name}
         editionId={currentEdition.id}

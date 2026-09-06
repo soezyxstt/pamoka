@@ -1,13 +1,17 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { formatLocalDate, isParticipantEligibleForCampaign } from "@/lib/voting";
 import { requirePermission } from "@/server/auth/authorization";
-import { appendAuditLog } from "@/server/auth/audit";
 import { database } from "@/server/db/client";
-import { participants, voteDailyTallies, votingCampaigns } from "@/server/db/schema";
 import { getAdminEditionContext } from "@/server/cms/context";
+import {
+  closeVotingCampaign,
+  createVotingCampaign,
+  saveVotingTally,
+  setVotingResultVisibility,
+  startVotingCampaign,
+  updateVotingCampaignStage,
+} from "@/server/voting-operations";
 
 function parseWibDateTime(value: FormDataEntryValue | null) {
   const raw = String(value ?? "");
@@ -15,127 +19,130 @@ function parseWibDateTime(value: FormDataEntryValue | null) {
   return new Date(`${raw}:00+07:00`);
 }
 
+function actorFromSession(actor: Awaited<ReturnType<typeof requirePermission>>) {
+  return { userId: actor.session.user.id, label: actor.session.user.email };
+}
+
+async function requireEditionId() {
+  const edition = await getAdminEditionContext();
+  if (!edition) throw new Error("Konteks edisi aktif tidak ditemukan");
+  return edition.id;
+}
+
 export async function createCampaignAction(formData: FormData) {
   const actor = await requirePermission("voting.manage");
-  const editionContext = await getAdminEditionContext();
-  if (!editionContext) {
-    throw new Error("Konteks edisi aktif tidak ditemukan");
-  }
-
-  const editionId = editionContext.id;
-  const name = String(formData.get("name") ?? "").trim();
-  const slug = String(formData.get("slug") ?? "").trim().toLowerCase();
-  const startsAt = parseWibDateTime(formData.get("startsAt"));
-  const endsAt = parseWibDateTime(formData.get("endsAt"));
-  const pricePerPoint = Number(formData.get("pricePerPoint"));
-
-  if (
-    !editionId ||
-    !name ||
-    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ||
-    Number.isNaN(startsAt.valueOf()) ||
-    Number.isNaN(endsAt.valueOf()) ||
-    startsAt >= endsAt ||
-    !Number.isSafeInteger(pricePerPoint) ||
-    pricePerPoint <= 0
-  ) {
-    throw new Error("Kampanye voting tidak valid");
-  }
-
-  const id = crypto.randomUUID();
-  await database.transaction(async (tx) => {
-    await tx.insert(votingCampaigns).values({ id, editionId, name, slug, startsAt, endsAt, pricePerPoint });
-    await appendAuditLog(tx, {
-      actorUserId: actor.session.user.id,
-      actorLabel: actor.session.user.email,
-      action: "voting.campaign.create",
-      resourceType: "votingCampaign",
-      resourceId: id,
-      resourceLabel: name,
-      after: { editionId, name, slug, startsAt, endsAt, pricePerPoint },
-      changedFields: ["editionId", "name", "slug", "startsAt", "endsAt", "pricePerPoint"],
-      source: "admin-voting",
-    });
-  });
-
+  const editionId = await requireEditionId();
+  await createVotingCampaign(
+    database,
+    editionId,
+    {
+      name: String(formData.get("name") ?? ""),
+      slug: String(formData.get("slug") ?? ""),
+      eligibilityStageId: String(formData.get("eligibilityStageId") ?? ""),
+      startsAt: parseWibDateTime(formData.get("startsAt")),
+      endsAt: parseWibDateTime(formData.get("endsAt")),
+      pricePerPoint: Number(formData.get("pricePerPoint")),
+    },
+    actorFromSession(actor),
+    new Date(),
+  );
+  revalidatePath("/admin");
   revalidatePath("/admin/voting");
+}
+
+export async function updateCampaignStageAction(input: {
+  campaignId: string;
+  stageId: string;
+  expectedVersion: number;
+}) {
+  const actor = await requirePermission("voting.manage");
+  const editionId = await requireEditionId();
+  const result = await updateVotingCampaignStage(
+    database,
+    editionId,
+    input,
+    actorFromSession(actor),
+    new Date(),
+  );
+  revalidatePath("/admin/voting");
+  return result;
+}
+
+export async function startCampaignAction(input: {
+  campaignId: string;
+  expectedVersion: number;
+  confirmation: string;
+  reason: string;
+}) {
+  const actor = await requirePermission("voting.manage");
+  const editionId = await requireEditionId();
+  const result = await startVotingCampaign(
+    database,
+    editionId,
+    input,
+    actorFromSession(actor),
+    new Date(),
+  );
+  revalidatePath("/admin");
+  revalidatePath("/admin/voting");
+  return result;
+}
+
+export async function closeCampaignAction(input: {
+  campaignId: string;
+  expectedVersion: number;
+  confirmation: string;
+  reason: string;
+}) {
+  const actor = await requirePermission("voting.manage");
+  const editionId = await requireEditionId();
+  const result = await closeVotingCampaign(
+    database,
+    editionId,
+    input,
+    actorFromSession(actor),
+    new Date(),
+  );
+  revalidatePath("/admin");
+  revalidatePath("/admin/voting");
+  return result;
+}
+
+export async function setResultVisibilityAction(input: {
+  campaignId: string;
+  expectedVersion: number;
+  visibility: "hidden" | "visible";
+  reason: string;
+}) {
+  const actor = await requirePermission("voting.manage");
+  const editionId = await requireEditionId();
+  const result = await setVotingResultVisibility(
+    database,
+    editionId,
+    input,
+    actorFromSession(actor),
+    new Date(),
+  );
+  revalidatePath("/admin/voting");
+  return result;
 }
 
 export async function saveTallyAction(formData: FormData) {
   const actor = await requirePermission("voting.tally");
-  const campaignId = String(formData.get("campaignId") ?? "");
-  const participantId = String(formData.get("participantId") ?? "");
-  const localDate = String(formData.get("localDate") ?? "");
-  const amount = Number(formData.get("amount"));
-  const expectedVersion = Number(formData.get("version") ?? 0);
-  const reason = String(formData.get("reason") ?? "").trim();
-
-  if (
-    !campaignId ||
-    !participantId ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(localDate) ||
-    !Number.isSafeInteger(amount) ||
-    amount < 0 ||
-    !Number.isSafeInteger(expectedVersion) ||
-    expectedVersion < 0 ||
-    !reason
-  ) {
-    throw new Error("Tally dan alasan perubahan wajib valid");
-  }
-
-  await database.transaction(async (tx) => {
-    const [campaign] = await tx.select().from(votingCampaigns).where(eq(votingCampaigns.id, campaignId)).limit(1);
-    const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId)).limit(1);
-
-    if (!campaign || !participant || !isParticipantEligibleForCampaign(campaign.editionId, participant)) {
-      throw new Error("Peserta bukan finalis aktif pada edisi kampanye ini");
-    }
-
-    const firstDate = formatLocalDate(campaign.startsAt, campaign.timezone);
-    const lastDate = formatLocalDate(campaign.endsAt, campaign.timezone);
-    if (localDate < firstDate || localDate > lastDate) {
-      throw new Error("Tanggal tally berada di luar periode kampanye");
-    }
-
-    const [before] = await tx
-      .select()
-      .from(voteDailyTallies)
-      .where(
-        and(
-          eq(voteDailyTallies.campaignId, campaignId),
-          eq(voteDailyTallies.participantId, participantId),
-          eq(voteDailyTallies.localDate, localDate),
-        ),
-      )
-      .limit(1);
-
-    if ((before?.version ?? 0) !== expectedVersion) {
-      throw new Error("Tally telah diperbarui admin lain. Muat ulang halaman sebelum menyimpan.");
-    }
-
-    const id = before?.id ?? crypto.randomUUID();
-    await tx
-      .insert(voteDailyTallies)
-      .values({ id, campaignId, participantId, localDate, amount })
-      .onConflictDoUpdate({
-        target: [voteDailyTallies.campaignId, voteDailyTallies.participantId, voteDailyTallies.localDate],
-        set: { amount, version: (before?.version ?? 0) + 1, updatedAt: new Date() },
-      });
-
-    await appendAuditLog(tx, {
-      actorUserId: actor.session.user.id,
-      actorLabel: actor.session.user.email,
-      action: before ? "voting.tally.correct" : "voting.tally.create",
-      resourceType: "voteDailyTally",
-      resourceId: id,
-      resourceLabel: participant.name,
-      before: before ? { amount: before.amount, version: before.version } : null,
-      after: { campaignId, participantId, localDate, amount, version: (before?.version ?? 0) + 1 },
-      changedFields: ["amount", "version"],
-      source: "admin-voting",
-      reason,
-    });
-  });
-
+  const editionId = await requireEditionId();
+  await saveVotingTally(
+    database,
+    editionId,
+    {
+      campaignId: String(formData.get("campaignId") ?? ""),
+      participantId: String(formData.get("participantId") ?? ""),
+      localDate: String(formData.get("localDate") ?? ""),
+      amount: Number(formData.get("amount")),
+      expectedVersion: Number(formData.get("version") ?? 0),
+      reason: String(formData.get("reason") ?? ""),
+    },
+    actorFromSession(actor),
+    new Date(),
+  );
   revalidatePath("/admin/voting");
 }

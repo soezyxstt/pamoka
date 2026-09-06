@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowUpRight, ChevronDown, ChevronRight, Menu, X } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { ArrowUpRight, ChevronDown, ChevronRight, Menu } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { AdminScrollArea, adminNativeScrollbarClassName } from "./admin-scroll-area";
 import { AdminIcon, type AdminIconName } from "./icons";
 import { AdminEditionSelector } from "./edition-selector";
 import type { AdminEditionContext } from "@/server/cms/context";
@@ -23,6 +26,51 @@ export type AdminUser = { name: string; email: string };
 
 const CONTENT_NAV_STORAGE_KEY = "pamoka_admin_nav_content_open";
 
+const isContentPath = (value: string) =>
+  value.startsWith("/admin/content") && value !== "/admin/content/editions";
+
+const contentNavigationFallbacks = new WeakMap<Window, boolean>();
+
+const contentNavigationStore = {
+  listeners: new Set<() => void>(),
+  subscribe(listener: () => void) {
+    contentNavigationStore.listeners.add(listener);
+    if (typeof window === "undefined") return () => contentNavigationStore.listeners.delete(listener);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === CONTENT_NAV_STORAGE_KEY || event.key === null) listener();
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      contentNavigationStore.listeners.delete(listener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  },
+  getSnapshot() {
+    if (typeof window === "undefined") return true;
+    try {
+      const stored = window.localStorage.getItem(CONTENT_NAV_STORAGE_KEY);
+      return stored !== null ? stored === "true" : contentNavigationFallbacks.get(window) ?? true;
+    } catch {
+      return contentNavigationFallbacks.get(window) ?? true;
+    }
+  },
+  getServerSnapshot() {
+    return true;
+  },
+  setOpen(isOpen: boolean) {
+    if (typeof window !== "undefined") {
+      contentNavigationFallbacks.set(window, isOpen);
+      try {
+        window.localStorage.setItem(CONTENT_NAV_STORAGE_KEY, String(isOpen));
+      } catch {
+        // Persistence is optional; the in-memory value keeps navigation usable.
+      }
+    }
+    contentNavigationStore.listeners.forEach((listener) => listener());
+  },
+};
+
 export function AdminShell({
   children,
   links,
@@ -38,28 +86,26 @@ export function AdminShell({
 }) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isContentOpen, setIsContentOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      const stored = localStorage.getItem(CONTENT_NAV_STORAGE_KEY);
-      return stored !== null ? stored === "true" : true;
-    } catch {
-      return true;
-    }
-  });
+  const isContentOpen = useSyncExternalStore(
+    contentNavigationStore.subscribe,
+    contentNavigationStore.getSnapshot,
+    contentNavigationStore.getServerSnapshot,
+  );
+  const previousPathnameRef = useRef(pathname);
 
-  const isContentActive =
-    pathname.startsWith("/admin/content") && pathname !== "/admin/content/editions";
-  const effectivelyContentOpen = isContentActive || isContentOpen;
+  useEffect(() => {
+    const wasContentPath = isContentPath(previousPathnameRef.current);
+    const isCurrentContentPath = isContentPath(pathname);
+
+    if (isCurrentContentPath && !wasContentPath) {
+      contentNavigationStore.setOpen(true);
+    }
+
+    previousPathnameRef.current = pathname;
+  }, [pathname]);
 
   const handleToggleContent = () => {
-    const nextState = !effectivelyContentOpen;
-    setIsContentOpen(nextState);
-    try {
-      localStorage.setItem(CONTENT_NAV_STORAGE_KEY, String(nextState));
-    } catch {
-      // ignore
-    }
+    contentNavigationStore.setOpen(!isContentOpen);
   };
 
   const groups = [...new Set(links.map((link) => link.group))];
@@ -80,22 +126,24 @@ export function AdminShell({
     if (group === "Konten") {
       return (
         <div key={group} className="space-y-1">
-          <button
+          <Button
             type="button"
             onClick={handleToggleContent}
-            aria-expanded={effectivelyContentOpen}
-            className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-white/45 hover:text-white/70 transition-colors"
+            aria-expanded={isContentOpen}
+            variant="ghost"
+            size="sm"
+            className="flex h-auto w-full justify-between rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/45 hover:bg-white/6 hover:text-white/70"
           >
             <span>{group}</span>
             <span className="flex items-center gap-1 text-[9px] font-normal lowercase tracking-normal text-white/35">
-              {effectivelyContentOpen ? (
+              {isContentOpen ? (
                 <ChevronDown size={14} className="text-white/60" />
               ) : (
                 <ChevronRight size={14} className="text-white/60" />
               )}
             </span>
-          </button>
-          {effectivelyContentOpen ? (
+          </Button>
+          {isContentOpen ? (
             <div className="space-y-1 pt-1">
               {groupLinks.map((item) => {
                 const active = isActive(item);
@@ -106,7 +154,7 @@ export function AdminShell({
                     aria-current={active ? "page" : undefined}
                     onClick={() => setIsMobileOpen(false)}
                     className={cn(
-                      "group flex min-h-9 items-center gap-2.5 border-l-2 px-3 py-1.5 text-xs font-medium transition-colors",
+                      "group flex min-h-10 items-center gap-3 border-l-2 px-3 py-2 text-sm font-medium transition-colors",
                       active
                         ? "border-fb bg-white/9 text-white font-semibold"
                         : "border-transparent text-white/66 hover:border-white/20 hover:bg-white/6 hover:text-white",
@@ -163,104 +211,102 @@ export function AdminShell({
   );
 
   return (
-    <div className="min-h-screen bg-background text-foreground lg:flex">
-      <aside className="relative hidden w-64 shrink-0 overflow-hidden border-r border-white/10 bg-dgb-900 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-radial-[at_50%_100%] from-fb-900/55 to-70% to-transparent" />
-        <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5">
-          <Link href="/admin" className="flex items-center gap-3" aria-label="Dashboard PAMOKA CMS">
-            <Image src="/logogram-gold.png" alt="" width={30} height={30} className="size-8 object-contain" />
-            <span>
-              <span className="block font-montserrat text-sm font-semibold tracking-wide text-white">PAMOKA CMS</span>
-              <span className="block text-[9px] uppercase tracking-[0.16em] text-fb-300">Ruang kerja admin</span>
-            </span>
-          </Link>
-        </div>
-        <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-5">{navigation}</div>
-        <div className="relative border-t border-white/8 p-4">
-          <div className="mb-2 border-l-2 border-fb px-3 py-1">
-            <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-fb-300">Edisi terpilih</p>
-            <p className="mt-1 truncate text-xs font-medium text-white/75">
-              {currentEdition ? `${currentEdition.name}, ${currentEdition.year}` : "Belum ditentukan"}
-            </p>
-          </div>
-          <Link
-            href="/"
-            target="_blank"
-            className="flex items-center justify-between border-l-2 border-transparent px-3 py-2 text-xs text-white/66 transition-colors hover:border-white/20 hover:bg-white/6 hover:text-white"
-          >
-            Lihat situs publik <ArrowUpRight size={14} />
-          </Link>
-        </div>
-      </aside>
-
-      {isMobileOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            className="absolute inset-0 bg-dgb-900/65 backdrop-blur-sm"
-            aria-label="Tutup navigasi"
-            onClick={() => setIsMobileOpen(false)}
-          />
-          <aside className="relative flex h-full w-[min(86vw,19rem)] flex-col overflow-hidden bg-dgb-900 shadow-2xl">
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 bg-radial-[at_50%_100%] from-fb-900/55 to-70% to-transparent" />
-            <div className="flex h-16 items-center justify-between border-b border-white/8 px-5">
-              <Link href="/admin" onClick={() => setIsMobileOpen(false)} className="flex items-center gap-3">
-                <Image src="/logogram-gold.png" alt="" width={30} height={30} className="size-8 object-contain" />
-                <span className="font-montserrat text-sm font-semibold text-white">PAMOKA CMS</span>
-              </Link>
-              <button
-                className="grid size-9 place-items-center rounded-md text-white/70 hover:bg-white/8 hover:text-white"
-                onClick={() => setIsMobileOpen(false)}
-                aria-label="Tutup navigasi"
-              >
-                <X size={19} />
-              </button>
-            </div>
-            <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-5">{navigation}</div>
-          </aside>
-        </div>
-      ) : null}
-
-      <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-dgb-100 bg-dgb-50/88 px-3 backdrop-blur-xl sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button
-              className="grid size-10 shrink-0 place-items-center rounded-md border border-dgb-100 bg-dgb-50 text-dgb lg:hidden"
-              onClick={() => setIsMobileOpen(true)}
-              aria-label="Buka navigasi"
-            >
-              <Menu size={18} />
-            </button>
-            <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
-              <span className="font-montserrat font-semibold text-dgb-900">PAMOKA CMS</span>
-              <ChevronRight size={13} />
-              <span>{currentEdition?.name ?? "Ruang kerja"}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <AdminEditionSelector
-              currentEdition={currentEdition}
-              editions={allEditions}
-            />
-
-            <Link
-              href="/admin/profile"
-              className="flex items-center gap-2.5 rounded-md p-1 transition-colors hover:bg-dgb-100/50"
-              aria-label={`Profil ${user.name}`}
-            >
-              <div className="hidden text-right lg:block">
-                <p className="text-xs font-semibold text-dgb-900 leading-tight">{user.name}</p>
-                <p className="max-w-[160px] truncate text-[11px] text-muted-foreground">{user.email}</p>
-              </div>
-              <div className="grid size-9 place-items-center rounded-md bg-dgb text-xs font-bold text-white shadow-xs">
-                {initials || "A"}
-              </div>
+    <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
+      <div className="min-h-screen bg-background text-foreground lg:flex">
+        <aside className="relative hidden w-64 shrink-0 overflow-hidden border-r border-white/10 bg-dgb-900 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+          <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5">
+            <Link href="/admin" className="flex items-center gap-3" aria-label="Dashboard PAMOKA CMS">
+              <Image src="/logogram-gold.png" alt="" width={30} height={30} className="size-8 object-contain" />
+              <span>
+                <span className="block font-montserrat text-sm font-semibold tracking-wide text-white">PAMOKA CMS</span>
+                <span className="block text-[9px] uppercase tracking-[0.16em] text-fb-300">Ruang kerja admin</span>
+              </span>
             </Link>
           </div>
-        </header>
-        {children}
+          <AdminScrollArea surface="dark" className="min-h-0 flex-1">
+            <div className="px-4 py-5">{navigation}</div>
+          </AdminScrollArea>
+          <div className="relative border-t border-white/8 p-4">
+            <div className="mb-2 border-l-2 border-fb px-3 py-1">
+              <p className="text-[9px] font-bold uppercase tracking-[0.15em] text-fb-300">Edisi terpilih</p>
+              <p className="mt-1 truncate text-xs font-medium text-white/75">
+                {currentEdition ? `${currentEdition.name}, ${currentEdition.year}` : "Belum ditentukan"}
+              </p>
+            </div>
+            <Link
+              href="/"
+              target="_blank"
+              className="flex items-center justify-between border-l-2 border-transparent px-3 py-2 text-xs text-white/66 transition-colors hover:border-white/20 hover:bg-white/6 hover:text-white"
+            >
+              Lihat situs publik <ArrowUpRight size={14} />
+            </Link>
+          </div>
+        </aside>
+
+        <SheetContent
+          side="left"
+          className="w-[min(86vw,19rem)] gap-0 overflow-hidden border-white/10 bg-dgb-900 p-0 text-white sm:max-w-[19rem] [&>button]:text-white/70 [&>button]:hover:bg-white/8 [&>button]:hover:text-white"
+        >
+          <SheetTitle className="sr-only">Navigasi admin PAMOKA CMS</SheetTitle>
+          <SheetDescription className="sr-only">Menu ruang kerja admin PAMOKA.</SheetDescription>
+          <div className="flex h-16 shrink-0 items-center border-b border-white/8 px-5 pr-14">
+            <Link href="/admin" onClick={() => setIsMobileOpen(false)} className="flex items-center gap-3" aria-label="Dashboard PAMOKA CMS">
+              <Image src="/logogram-gold.png" alt="" width={30} height={30} className="size-8 object-contain" />
+              <span className="font-montserrat text-sm font-semibold text-white">PAMOKA CMS</span>
+            </Link>
+          </div>
+          <AdminScrollArea surface="dark" className="min-h-0 flex-1">
+            <div className="px-4 py-5">{navigation}</div>
+          </AdminScrollArea>
+        </SheetContent>
+
+        <div className={cn("h-screen min-w-0 flex-1 overflow-y-auto", adminNativeScrollbarClassName)}>
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-dgb-100 bg-dgb-50/88 px-3 backdrop-blur-xl sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <SheetTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-10 shrink-0 border border-dgb-100 bg-dgb-50 text-dgb shadow-none hover:bg-dgb-100 hover:text-dgb lg:hidden"
+                  aria-label="Buka navigasi"
+                  aria-expanded={isMobileOpen}
+                >
+                  <Menu size={18} />
+                </Button>
+              </SheetTrigger>
+              <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex">
+                <span className="font-montserrat font-semibold text-dgb-900">PAMOKA CMS</span>
+                <ChevronRight size={13} />
+                <span>{currentEdition?.name ?? "Ruang kerja"}</span>
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <AdminEditionSelector
+                currentEdition={currentEdition}
+                editions={allEditions}
+              />
+
+              <Link
+                href="/admin/profile"
+                className="flex items-center gap-2.5 rounded-md p-1 transition-colors hover:bg-dgb-100/50"
+                aria-label={`Profil ${user.name}`}
+              >
+                <div className="hidden text-right lg:block">
+                  <p className="text-xs font-semibold leading-tight text-dgb-900">{user.name}</p>
+                  <p className="max-w-[160px] truncate text-[11px] text-muted-foreground">{user.email}</p>
+                </div>
+                <div className="grid size-9 place-items-center rounded-md bg-dgb text-xs font-bold text-white shadow-xs">
+                  {initials || "A"}
+                </div>
+              </Link>
+            </div>
+          </header>
+          {children}
+        </div>
       </div>
-    </div>
+    </Sheet>
   );
 }
 

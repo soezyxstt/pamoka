@@ -92,6 +92,7 @@ export function TipTapEditor({
         },
       }),
       CustomTipTapImage.configure({
+        allowBase64: false,
         HTMLAttributes: {
           class: "rounded-lg border border-border my-4 max-w-full h-auto",
         },
@@ -195,7 +196,8 @@ export function TipTapEditor({
   return (
     <div className={cn("overflow-hidden rounded-lg border border-border bg-white shadow-xs", className)}>
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/40 p-1.5 text-foreground">
+      <fieldset disabled={!editable} className="min-w-0 border-0 p-0">
+        <div className="flex flex-wrap items-center gap-1 border-b border-border bg-muted/40 p-1.5 text-foreground">
         {/* Paragraf */}
         <Button
           type="button"
@@ -388,7 +390,8 @@ export function TipTapEditor({
         >
           <Redo2 size={15} />
         </Button>
-      </div>
+        </div>
+      </fieldset>
 
       {/* Editor Content Area */}
       <div className="relative min-h-[360px] bg-white">

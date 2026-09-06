@@ -1,11 +1,12 @@
 "use server";
 
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { appendAuditLog } from "@/server/auth/audit";
 import { requirePermission } from "@/server/auth/authorization";
 import { database } from "@/server/db/client";
+import { validatePeriodEditionSelection } from "@/server/organization/period-editions";
 import {
   editions,
   mediaAssets,
@@ -16,13 +17,12 @@ import {
   people,
   personSocialLinks,
   socialPlatforms,
-  type OrganizationPeriodRow,
   type OrganizationUnitRow,
   type PeriodLifecycle,
   type SocialPlatform,
 } from "@/server/db/schema";
 
-export const PERIOD_LIFECYCLES = ["draft", "active", "archived"] as const;
+const PERIOD_LIFECYCLES = ["draft", "active", "archived"] as const;
 
 function validateHttpsUrl(urlStr: string): string {
   const trimmed = urlStr.trim();
@@ -53,26 +53,105 @@ function slugify(text: string): string {
   return cleaned || "profil";
 }
 
+function parseNonNegativeInteger(value: FormDataEntryValue | null | undefined, label: string, fallback = 0) {
+  const raw = value === null || value === undefined || value === "" ? fallback : Number(value);
+  if (!Number.isInteger(raw) || raw < 0) {
+    throw new Error(`${label} harus berupa bilangan bulat nol atau lebih`);
+  }
+  return raw;
+}
+
+function parseVersion(value: FormDataEntryValue | null | undefined, label: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${label} tidak valid`);
+  }
+  return parsed;
+}
+
+function parseMissions(value: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value || "[]");
+  } catch {
+    throw new Error("Format daftar misi tidak valid");
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Format daftar misi tidak valid");
+  }
+
+  const missions = parsed.map((item) => String(item).trim()).filter(Boolean);
+  return JSON.stringify(missions);
+}
+
+function parseUniqueStringArray(value: FormDataEntryValue | null, label: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(value ?? "[]"));
+  } catch {
+    throw new Error(`${label} tidak valid`);
+  }
+
+  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string" || !item.trim())) {
+    throw new Error(`${label} tidak valid`);
+  }
+
+  const normalized = parsed.map((item) => item.trim());
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error(`${label} tidak boleh memuat data ganda`);
+  }
+  return normalized;
+}
+
 // ---------------------------------------------------------------------------
 // Unit Tree Helper / Validation
 // ---------------------------------------------------------------------------
+
+function validateOrganizationTree(units: Pick<OrganizationUnitRow, "id" | "parentId">[]) {
+  const unitMap = new Map(units.map((unit) => [unit.id, unit]));
+  const state = new Map<string, "visiting" | "visited">();
+  const depthMap = new Map<string, number>();
+
+  const visit = (id: string): number => {
+    const currentState = state.get(id);
+    if (currentState === "visiting") {
+      throw new Error("Terdeteksi struktur melingkar pada hierarki unit");
+    }
+    if (currentState === "visited") return depthMap.get(id) ?? 1;
+
+    const unit = unitMap.get(id);
+    if (!unit) throw new Error("Unit organisasi tidak ditemukan pada periode ini");
+
+    state.set(id, "visiting");
+    const depth = unit.parentId ? visit(unit.parentId) + 1 : 1;
+    if (depth > 4) {
+      throw new Error(`Struktur organisasi maksimal 4 tingkat kedalaman (tingkat saat ini: ${depth})`);
+    }
+    depthMap.set(id, depth);
+    state.set(id, "visited");
+    return depth;
+  };
+
+  for (const unit of units) visit(unit.id);
+  return depthMap;
+}
 
 function checkTreeCycleAndDepth(
   units: OrganizationUnitRow[],
   targetUnitId: string | null,
   newParentId: string | null
 ) {
-  if (!newParentId) return; // Root unit (depth 1) is always valid
+  const depthMap = validateOrganizationTree(units);
+  if (!newParentId) return;
 
   if (targetUnitId && newParentId === targetUnitId) {
     throw new Error("Unit tidak dapat menjadi induk bagi dirinya sendiri");
   }
 
-  const unitMap = new Map<string, OrganizationUnitRow>();
   const childrenMap = new Map<string, string[]>();
 
   for (const u of units) {
-    unitMap.set(u.id, u);
     if (u.parentId) {
       const list = childrenMap.get(u.parentId) ?? [];
       list.push(u.id);
@@ -80,26 +159,24 @@ function checkTreeCycleAndDepth(
     }
   }
 
-  const parent = unitMap.get(newParentId);
+  const parent = units.find((unit) => unit.id === newParentId);
   if (!parent) {
     throw new Error("Unit induk tidak ditemukan");
   }
 
-  // Check cycle by walking up ancestors of newParentId
-  let ancestorWalk: OrganizationUnitRow | undefined = parent;
-  let parentDepth = 1;
-  const visited = new Set<string>([parent.id]);
-
-  while (ancestorWalk?.parentId) {
-    if (targetUnitId && ancestorWalk.parentId === targetUnitId) {
-      throw new Error("Terdeteksi hubungan melingkar: unit turunan tidak bisa menjadi induk");
+  if (targetUnitId) {
+    let ancestorId: string | null = parent.id;
+    const visited = new Set<string>();
+    while (ancestorId) {
+      if (ancestorId === targetUnitId) {
+        throw new Error("Terdeteksi hubungan melingkar: unit turunan tidak bisa menjadi induk");
+      }
+      if (visited.has(ancestorId)) {
+        throw new Error("Terdeteksi struktur melingkar pada hierarki unit");
+      }
+      visited.add(ancestorId);
+      ancestorId = units.find((unit) => unit.id === ancestorId)?.parentId ?? null;
     }
-    if (visited.has(ancestorWalk.parentId)) {
-      throw new Error("Terdeteksi struktur melingkar pada hierarki unit");
-    }
-    visited.add(ancestorWalk.parentId);
-    parentDepth++;
-    ancestorWalk = unitMap.get(ancestorWalk.parentId);
   }
 
   // Calculate max subtree height if updating existing unit
@@ -118,7 +195,7 @@ function checkTreeCycleAndDepth(
     subtreeHeight = getSubtreeHeight(targetUnitId);
   }
 
-  const totalDepth = parentDepth + 1 + subtreeHeight;
+  const totalDepth = (depthMap.get(parent.id) ?? 1) + 1 + subtreeHeight;
   if (totalDepth > 4) {
     throw new Error(`Struktur organisasi maksimal 4 tingkat kedalaman (tingkat saat ini: ${totalDepth})`);
   }
@@ -154,15 +231,7 @@ export async function createPeriodAction(formData: FormData) {
     throw new Error("Status siklus periode tidak valid");
   }
 
-  let missionJson = "[]";
-  try {
-    const parsed = JSON.parse(missionJsonRaw);
-    if (Array.isArray(parsed)) {
-      missionJson = JSON.stringify(parsed.map((item) => String(item).trim()).filter(Boolean));
-    }
-  } catch {
-    throw new Error("Format daftar misi tidak valid");
-  }
+  const missionJson = parseMissions(missionJsonRaw);
 
   const id = crypto.randomUUID();
   const now = new Date();
@@ -212,7 +281,7 @@ export async function updatePeriodAction(formData: FormData) {
   const actor = await requirePermission("people.manage");
 
   const id = String(formData.get("id") ?? "").trim();
-  const version = Number(formData.get("version") ?? 1);
+  const version = parseVersion(formData.get("version"), "Versi periode");
   const label = String(formData.get("label") ?? "").trim();
   const startYear = Number(formData.get("startYear"));
   const endYear = Number(formData.get("endYear"));
@@ -240,15 +309,7 @@ export async function updatePeriodAction(formData: FormData) {
     throw new Error("Status siklus periode tidak valid");
   }
 
-  let missionJson = "[]";
-  try {
-    const parsed = JSON.parse(missionJsonRaw);
-    if (Array.isArray(parsed)) {
-      missionJson = JSON.stringify(parsed.map((item) => String(item).trim()).filter(Boolean));
-    }
-  } catch {
-    throw new Error("Format daftar misi tidak valid");
-  }
+  const missionJson = parseMissions(missionJsonRaw);
 
   await database.transaction(async (tx) => {
     const [current] = await tx
@@ -316,10 +377,120 @@ export async function updatePeriodAction(formData: FormData) {
   return { success: true };
 }
 
+export async function setPeriodEditionsAction(formData: FormData) {
+  const actor = await requirePermission("people.manage");
+  const periodId = String(formData.get("periodId") ?? "").trim();
+  const periodVersion = parseVersion(formData.get("periodVersion"), "Versi periode");
+  const editionIds = parseUniqueStringArray(formData.get("editionIds"), "Daftar edisi");
+  const confirmedReassignmentIds = parseUniqueStringArray(
+    formData.get("confirmedReassignmentIds"),
+    "Konfirmasi pemindahan"
+  );
+
+  if (!periodId) {
+    throw new Error("ID periode wajib disertakan");
+  }
+
+  const selectedIds = new Set(editionIds);
+  let affectedPreviousPeriodIds: string[] = [];
+
+  await database.transaction(async (tx) => {
+    const [period] = await tx
+      .select()
+      .from(organizationPeriods)
+      .where(eq(organizationPeriods.id, periodId))
+      .limit(1);
+
+    if (!period) {
+      throw new Error("Periode kepengurusan tidak ditemukan");
+    }
+    if (period.version !== periodVersion) {
+      throw new Error("Versi data telah diperbarui oleh pengguna lain. Silakan muat ulang halaman.");
+    }
+
+    const allEditions = await tx.select().from(editions);
+    const { selectedEditions, conflicts } = validatePeriodEditionSelection(
+      allEditions,
+      periodId,
+      editionIds,
+      confirmedReassignmentIds
+    );
+    const editionById = new Map(selectedEditions.map((edition) => [edition.id, edition]));
+
+    const currentLinked = allEditions.filter((edition) => edition.organizationPeriodId === periodId);
+    const previousPeriodIds = new Set(
+      conflicts
+        .map((edition) => edition.organizationPeriodId)
+        .filter((id): id is string => Boolean(id))
+    );
+    affectedPreviousPeriodIds = [...previousPeriodIds];
+
+    for (const edition of currentLinked) {
+      if (selectedIds.has(edition.id)) continue;
+      await tx
+        .update(editions)
+        .set({
+          organizationPeriodId: null,
+          version: edition.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(editions.id, edition.id));
+    }
+
+    for (const editionId of editionIds) {
+      const edition = editionById.get(editionId)!;
+      if (edition.organizationPeriodId === periodId) continue;
+      await tx
+        .update(editions)
+        .set({
+          organizationPeriodId: periodId,
+          version: edition.version + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(editions.id, edition.id));
+    }
+
+    const nextPeriodVersion = period.version + 1;
+    await tx
+      .update(organizationPeriods)
+      .set({ version: nextPeriodVersion, updatedAt: new Date() })
+      .where(eq(organizationPeriods.id, periodId));
+
+    await appendAuditLog(tx, {
+      actorUserId: actor.session.user.id,
+      actorLabel: actor.session.user.email,
+      action: "organization.period.editions.update",
+      resourceType: "organization_period",
+      resourceId: periodId,
+      resourceLabel: period.label,
+      before: {
+        editionIds: currentLinked.map((edition) => edition.id),
+        version: period.version,
+      },
+      after: {
+        editionIds,
+        reassignedEditionIds: conflicts.map((edition) => edition.id),
+        version: nextPeriodVersion,
+      },
+      changedFields: ["editionIds", "version"],
+      source: "admin-organization",
+    });
+  });
+
+  revalidatePath("/admin/organization");
+  revalidatePath(`/admin/organization/periods/${periodId}`);
+  for (const previousPeriodId of affectedPreviousPeriodIds) {
+    revalidatePath(`/admin/organization/periods/${previousPeriodId}`);
+  }
+  revalidatePath("/admin");
+  return { success: true, linkedCount: editionIds.length };
+}
+
 export async function deletePeriodAction(formData: FormData) {
   const actor = await requirePermission("people.manage");
 
   const id = String(formData.get("id") ?? "").trim();
+  const version = parseVersion(formData.get("version"), "Versi periode");
   if (!id) {
     throw new Error("ID periode wajib disertakan");
   }
@@ -333,6 +504,10 @@ export async function deletePeriodAction(formData: FormData) {
 
     if (!current) {
       throw new Error("Periode kepengurusan tidak ditemukan");
+    }
+
+    if (current.version !== version) {
+      throw new Error("Versi data telah diperbarui oleh pengguna lain. Silakan muat ulang halaman.");
     }
 
     // Unlink any editions tied to this period
@@ -383,9 +558,7 @@ export async function createUnitAction(formData: FormData) {
     throw new Error("Nama unit organisasi wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan unit");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   const id = crypto.randomUUID();
@@ -406,6 +579,8 @@ export async function createUnitAction(formData: FormData) {
       .select()
       .from(organizationUnits)
       .where(eq(organizationUnits.periodId, periodId));
+
+    validateOrganizationTree(existingUnits);
 
     if (parentIdRaw) {
       const parentUnit = existingUnits.find((u) => u.id === parentIdRaw);
@@ -468,9 +643,7 @@ export async function updateUnitAction(formData: FormData) {
     throw new Error("Nama unit organisasi wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan unit");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   let periodId = "";
@@ -492,6 +665,8 @@ export async function updateUnitAction(formData: FormData) {
       .select()
       .from(organizationUnits)
       .where(eq(organizationUnits.periodId, current.periodId));
+
+    validateOrganizationTree(existingUnits);
 
     if (parentIdRaw) {
       const parentUnit = existingUnits.find((u) => u.id === parentIdRaw);
@@ -543,6 +718,8 @@ export async function updateUnitAction(formData: FormData) {
   return { success: true };
 }
 
+
+
 export async function deleteUnitAction(formData: FormData) {
   const actor = await requirePermission("people.manage");
 
@@ -592,28 +769,59 @@ export async function reorderUnitsAction(items: { id: string; displayOrder: numb
   const actor = await requirePermission("people.manage");
 
   if (!Array.isArray(items) || items.length === 0) {
-    return { success: true };
+    throw new Error("Daftar unit untuk pengurutan wajib disertakan");
+  }
+
+  const normalizedItems = items.map((item) => {
+    if (!item || typeof item !== "object" || typeof item.id !== "string" || !item.id.trim()) {
+      throw new Error("ID unit tidak valid");
+    }
+    if (typeof item.displayOrder !== "number" || !Number.isInteger(item.displayOrder) || item.displayOrder < 0) {
+      throw new Error("Urutan unit harus berupa bilangan bulat nol atau lebih");
+    }
+    return { id: item.id.trim(), displayOrder: item.displayOrder };
+  });
+
+  const itemIds = normalizedItems.map((item) => item.id);
+  if (new Set(itemIds).size !== itemIds.length) {
+    throw new Error("Unit yang sama tidak boleh diurutkan lebih dari sekali");
   }
 
   let periodId = "";
 
   await database.transaction(async (tx) => {
-    for (const item of items) {
-      if (!item.id || typeof item.displayOrder !== "number") continue;
+    const targetUnits = await tx
+      .select()
+      .from(organizationUnits)
+      .where(inArray(organizationUnits.id, itemIds));
 
-      const [unit] = await tx
-        .select()
-        .from(organizationUnits)
-        .where(eq(organizationUnits.id, item.id))
-        .limit(1);
+    if (targetUnits.length !== normalizedItems.length) {
+      throw new Error("Satu atau beberapa unit organisasi tidak ditemukan");
+    }
 
-      if (unit) {
-        periodId = unit.periodId;
-        await tx
-          .update(organizationUnits)
-          .set({ displayOrder: item.displayOrder, updatedAt: new Date() })
-          .where(eq(organizationUnits.id, item.id));
-      }
+    const periodIds = new Set(targetUnits.map((unit) => unit.periodId));
+    if (periodIds.size !== 1) {
+      throw new Error("Pengurutan unit lintas periode tidak diizinkan");
+    }
+
+    const parentIds = new Set(targetUnits.map((unit) => unit.parentId));
+    if (parentIds.size !== 1) {
+      throw new Error("Unit yang diurutkan harus berada pada tingkat induk yang sama");
+    }
+
+    periodId = targetUnits[0]!.periodId;
+    const allPeriodUnits = await tx
+      .select()
+      .from(organizationUnits)
+      .where(eq(organizationUnits.periodId, periodId));
+    validateOrganizationTree(allPeriodUnits);
+
+    const now = new Date();
+    for (const item of normalizedItems) {
+      await tx
+        .update(organizationUnits)
+        .set({ displayOrder: item.displayOrder, updatedAt: now })
+        .where(eq(organizationUnits.id, item.id));
     }
 
     await appendAuditLog(tx, {
@@ -623,7 +831,7 @@ export async function reorderUnitsAction(items: { id: string; displayOrder: numb
       resourceType: "organization_unit",
       resourceId: periodId || "bulk",
       resourceLabel: "Pengurutan unit organisasi",
-      after: { items },
+      after: { items: normalizedItems, periodId },
       changedFields: ["displayOrder"],
       source: "admin-organization",
     });
@@ -658,9 +866,7 @@ export async function assignMemberAction(formData: FormData) {
     throw new Error("Nama jabatan wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan penugasan");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   const id = crypto.randomUUID();
@@ -731,7 +937,7 @@ export async function updateMembershipAction(formData: FormData) {
   const actor = await requirePermission("people.manage");
 
   const id = String(formData.get("id") ?? "").trim();
-  const version = Number(formData.get("version") ?? 1);
+  const version = parseVersion(formData.get("version"), "Versi penugasan");
   const unitId = String(formData.get("unitId") ?? "").trim();
   const personId = String(formData.get("personId") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
@@ -746,9 +952,7 @@ export async function updateMembershipAction(formData: FormData) {
     throw new Error("Nama jabatan wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan penugasan");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   let periodId = "";
@@ -907,7 +1111,7 @@ export async function savePersonAction(formData: FormData) {
   const shortBio = formData.get("shortBio")?.toString().trim() || null;
   const portraitMediaIdRaw = formData.get("portraitMediaId")?.toString().trim() || null;
   const socialLinksRaw = formData.get("socialLinks")?.toString().trim() || "[]";
-  const version = Number(formData.get("version") ?? 1);
+  const version = idRaw ? parseVersion(formData.get("version"), "Versi profil") : 1;
 
   if (!name) {
     throw new Error("Nama lengkap profil wajib diisi");
@@ -916,40 +1120,37 @@ export async function savePersonAction(formData: FormData) {
   const baseSlug = slugInput ? slugify(slugInput) : slugify(name);
   const portraitMediaId = portraitMediaIdRaw && portraitMediaIdRaw.length > 0 ? portraitMediaIdRaw : null;
 
-  if (portraitMediaId) {
-    const [asset] = await database
-      .select()
-      .from(mediaAssets)
-      .where(eq(mediaAssets.id, portraitMediaId))
-      .limit(1);
-
-    if (!asset || asset.lifecycle !== "ready" || !asset.mimeType.startsWith("image/")) {
-      throw new Error("Foto portrait harus berupa gambar yang valid dan siap digunakan");
-    }
-  }
-
   let socialLinks: PersonSocialLinkInput[] = [];
   try {
     const parsed = JSON.parse(socialLinksRaw);
-    if (Array.isArray(parsed)) {
-      socialLinks = parsed.map((item, idx) => {
-        const platform = String(item.platform ?? "").toLowerCase();
+    if (!Array.isArray(parsed)) {
+      throw new Error("Format tautan sosial media tidak valid");
+    }
+    socialLinks = parsed.map((item, idx) => {
+        if (!item || typeof item !== "object") {
+          throw new Error("Format tautan sosial media tidak valid");
+        }
+        const record = item as Record<string, unknown>;
+        const platform = String(record.platform ?? "").toLowerCase();
         if (!socialPlatforms.includes(platform as SocialPlatform)) {
           throw new Error(`Platform sosial tidak valid: ${platform}`);
         }
-        const url = validateHttpsUrl(String(item.url ?? ""));
-        const label = item.label ? String(item.label).trim() : null;
+        const url = validateHttpsUrl(String(record.url ?? ""));
+        const label = record.label ? String(record.label).trim() : null;
         if (platform === "other" && !label) {
           throw new Error("Platform 'other' (lainnya) wajib menyertakan label");
+        }
+        const displayOrder = record.displayOrder === undefined ? idx : Number(record.displayOrder);
+        if (!Number.isInteger(displayOrder) || displayOrder < 0) {
+          throw new Error("Urutan tautan sosial harus berupa bilangan bulat nol atau lebih");
         }
         return {
           platform: platform as SocialPlatform,
           label,
           url,
-          displayOrder: Number.isInteger(item.displayOrder) ? Number(item.displayOrder) : idx,
+          displayOrder,
         };
       });
-    }
   } catch (err: unknown) {
     if (err instanceof Error) throw err;
     throw new Error("Format tautan sosial media tidak valid");
@@ -960,6 +1161,18 @@ export async function savePersonAction(formData: FormData) {
   const now = new Date();
 
   await database.transaction(async (tx) => {
+    if (portraitMediaId) {
+      const [asset] = await tx
+        .select({ id: mediaAssets.id, lifecycle: mediaAssets.lifecycle, mimeType: mediaAssets.mimeType })
+        .from(mediaAssets)
+        .where(eq(mediaAssets.id, portraitMediaId))
+        .limit(1);
+
+      if (!asset || asset.lifecycle !== "ready" || !asset.mimeType.startsWith("image/")) {
+        throw new Error("Foto portrait harus berupa gambar yang valid dan siap digunakan");
+      }
+    }
+
     let finalSlug = baseSlug;
     const existingSlug = await tx
       .select({ id: people.id, slug: people.slug })
@@ -1087,6 +1300,7 @@ export async function savePersonAction(formData: FormData) {
   });
 
   revalidatePath("/admin/organization");
+  revalidatePath("/admin/content/committee");
   return { success: true, id: personId };
 }
 
@@ -1094,6 +1308,7 @@ export async function deletePersonAction(formData: FormData) {
   const actor = await requirePermission("people.manage");
 
   const id = String(formData.get("id") ?? "").trim();
+  const version = parseVersion(formData.get("version"), "Versi profil");
   if (!id) {
     throw new Error("ID profil wajib disertakan");
   }
@@ -1109,6 +1324,11 @@ export async function deletePersonAction(formData: FormData) {
       throw new Error("Profil orang tidak ditemukan");
     }
 
+    if (current.version !== version) {
+      throw new Error("Versi data telah diperbarui oleh pengguna lain. Silakan muat ulang halaman.");
+    }
+
+    await tx.delete(organizationAssignments).where(eq(organizationAssignments.personId, id));
     await tx.delete(people).where(eq(people.id, id));
 
     await appendAuditLog(tx, {
@@ -1125,6 +1345,7 @@ export async function deletePersonAction(formData: FormData) {
   });
 
   revalidatePath("/admin/organization");
+  revalidatePath("/admin/content/committee");
   return { success: true };
 }
 

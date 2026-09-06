@@ -95,15 +95,14 @@ export default async function EditNewsPage({ params }: PageProps) {
   };
 
   const canPublish = actor.effectivePermissions.has("content.publish");
-  const canManage =
-    actor.effectivePermissions.has("media.manage") ||
-    actor.effectivePermissions.has("news.manage");
+  const canEdit = actor.effectivePermissions.has("content.edit");
+  const canManage = actor.effectivePermissions.has("media.manage");
 
   return (
     <AdminPage
       eyebrow="Studio / editorial"
       title={article.title}
-      description={`Edit konten berita untuk ${currentEdition.name} (${currentEdition.year}).`}
+      description="Edit isi dan periksa tampilannya sebelum diterbitkan."
     >
       <NewsWorkspace
         initialArticle={articleData}
@@ -112,6 +111,7 @@ export default async function EditNewsPage({ params }: PageProps) {
         activeEditionId={currentEdition.id}
         canPublish={canPublish}
         canManage={canManage}
+        canEdit={canEdit}
       />
     </AdminPage>
   );

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 
 import { AdminButton, AdminInput, AdminSelect } from "@/components/admin/primitives";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useUploadThing } from "@/lib/uploadthing";
 import { cn } from "@/lib/utils";
@@ -182,9 +183,9 @@ function MediaUploader({ folderId, folderName }: { folderId: string | null; fold
                 >
                   <FileImage size={13} />
                   <span className="max-w-36 truncate">{file.name}</span>
-                  <button type="button" aria-label={`Hapus ${file.name}`} onClick={() => setFiles((current) => current.filter((item) => item !== file))}>
+                  <Button type="button" variant="ghost" size="icon" aria-label={`Hapus ${file.name}`} className="size-5 rounded-sm p-0" onClick={() => setFiles((current) => current.filter((item) => item !== file))}>
                     <X size={13} />
-                  </button>
+                  </Button>
                 </span>
               ))}
             </div>
@@ -285,51 +286,61 @@ export function MediaExplorer({
           </div>
 
           <div className="mb-2 flex rounded-md border border-border bg-white p-0.5 text-xs">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setFolderScope("all")}
-              className={cn("flex-1 py-1 rounded-xs font-medium text-center", folderScope === "all" ? "bg-dgb text-white" : "text-muted-foreground hover:text-foreground")}
+              className={cn("h-auto flex-1 rounded-xs px-2 py-1 font-medium text-center", folderScope === "all" ? "bg-dgb text-white" : "text-muted-foreground hover:text-foreground")}
             >
               Semua
-            </button>
+            </Button>
             {activeEditionId ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setFolderScope("edition")}
-                className={cn("flex-1 py-1 rounded-xs font-medium text-center", folderScope === "edition" ? "bg-dgb text-white" : "text-muted-foreground hover:text-foreground")}
+                className={cn("h-auto flex-1 rounded-xs px-2 py-1 font-medium text-center", folderScope === "edition" ? "bg-dgb text-white" : "text-muted-foreground hover:text-foreground")}
               >
                 Edisi
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setFolderScope("global")}
-              className={cn("flex-1 py-1 rounded-xs font-medium text-center", folderScope === "global" ? "bg-dgb text-white" : "text-muted-foreground hover:text-foreground")}
+              className={cn("h-auto flex-1 rounded-xs px-2 py-1 font-medium text-center", folderScope === "global" ? "bg-dgb text-white" : "text-muted-foreground hover:text-foreground")}
             >
               Global
-            </button>
+            </Button>
           </div>
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="default"
             onClick={() => openFolder(null)}
             className={cn(
-              "mt-1 flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors",
+              "mt-1 flex h-auto w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors",
               currentFolderId === null ? "bg-dgb text-white" : "text-dgb-800 hover:bg-dgb-50"
             )}
           >
             <FolderOpen size={16} /> Root media <span className="ml-auto text-xs opacity-65">{assets.length}</span>
-          </button>
+          </Button>
           <div className="mt-1 space-y-0.5">
             {flatFolders.map((folder) => {
               const folderEdition = editions.find((e) => e.id === folder.editionId);
               return (
-                <button
+                <Button
                   key={folder.id}
                   type="button"
+                  variant="ghost"
+                  size="default"
                   onClick={() => openFolder(folder.id)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md py-2 pr-2 text-left text-sm transition-colors",
+                    "flex h-auto w-full items-center gap-2 rounded-md py-2 pr-2 text-left text-sm transition-colors",
                     currentFolderId === folder.id ? "bg-white font-semibold text-dgb shadow-sm" : "text-dgb-800/75 hover:bg-white/75 hover:text-dgb",
                     folder.depth === 0 ? "pl-3" : folder.depth === 1 ? "pl-7" : "pl-10"
                   )}
@@ -342,7 +353,7 @@ export function MediaExplorer({
                     </span>
                   ) : null}
                   <span className="ml-auto text-[11px] opacity-55">{folderCount(folder.id)}</span>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -356,15 +367,15 @@ export function MediaExplorer({
         <section className="min-w-0 p-4 sm:p-5">
           <div className="flex flex-col gap-4 border-b border-border pb-4">
             <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <button type="button" className="font-semibold text-dgb hover:underline" onClick={() => openFolder(null)}>
+              <Button type="button" variant="ghost" size="sm" className="h-auto rounded-none px-0 py-0 font-semibold text-dgb hover:underline" onClick={() => openFolder(null)}>
                 Media
-              </button>
+              </Button>
               {folderPath.map((folder) => (
                 <span key={folder.id} className="flex items-center gap-1.5">
                   <span>/</span>
-                  <button type="button" className="hover:text-dgb hover:underline" onClick={() => openFolder(folder.id)}>
+                  <Button type="button" variant="ghost" size="sm" className="h-auto rounded-none px-0 py-0 hover:text-dgb hover:underline" onClick={() => openFolder(folder.id)}>
                     {folder.name}
-                  </button>
+                  </Button>
                 </span>
               ))}
             </div>
@@ -388,22 +399,26 @@ export function MediaExplorer({
                   />
                 </div>
                 <div className="flex h-10 rounded-md border border-border bg-muted p-1">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     aria-label="Tampilan grid"
-                    className={cn("grid w-8 place-items-center rounded-sm", viewMode === "grid" ? "bg-white text-dgb shadow-sm" : "text-muted-foreground")}
+                    className={cn("size-8 rounded-sm p-0", viewMode === "grid" ? "bg-white text-dgb shadow-sm" : "text-muted-foreground")}
                     onClick={() => setViewMode("grid")}
                   >
                     <Grid2X2 size={15} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     aria-label="Tampilan list"
-                    className={cn("grid w-8 place-items-center rounded-sm", viewMode === "list" ? "bg-white text-dgb shadow-sm" : "text-muted-foreground")}
+                    className={cn("size-8 rounded-sm p-0", viewMode === "list" ? "bg-white text-dgb shadow-sm" : "text-muted-foreground")}
                     onClick={() => setViewMode("list")}
                   >
                     <List size={15} />
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -411,14 +426,16 @@ export function MediaExplorer({
               <form action={createMediaFolderAction} className="flex flex-col gap-2 rounded-lg border border-dashed border-dgb-200 bg-dgb-50/35 p-3 sm:flex-row sm:items-center">
                 <input type="hidden" name="parentId" value={currentFolderId ?? ""} />
                 <AdminInput name="name" required maxLength={80} placeholder={currentFolder ? `Folder baru di ${currentFolder.name}` : "Nama folder baru"} className="flex-1" />
-                <AdminSelect name="editionId" defaultValue={activeEditionId ?? ""} className="sm:w-44">
-                  <option value="">Folder global</option>
-                  {editions.map((ed) => (
-                    <option key={ed.id} value={ed.id}>
-                      Edisi {ed.year}
-                    </option>
-                  ))}
-                </AdminSelect>
+                <AdminSelect
+                  aria-label="Edisi folder"
+                  name="editionId"
+                  defaultValue={activeEditionId ?? ""}
+                  className="sm:w-44"
+                  options={[
+                    { value: "", label: "Folder global" },
+                    ...editions.map((ed) => ({ value: ed.id, label: `Edisi ${ed.year}` })),
+                  ]}
+                />
                 <AdminButton type="submit" variant="secondary" className="shrink-0">
                   <FolderPlus size={15} /> Buat folder
                 </AdminButton>
@@ -431,11 +448,13 @@ export function MediaExplorer({
               {childFolders.map((folder) => {
                 const folderEdition = editions.find((e) => e.id === folder.editionId);
                 return (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="default"
                     key={folder.id}
                     onClick={() => openFolder(folder.id)}
-                    className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:border-fb-300 hover:bg-fb-50"
+                    className="flex h-auto w-full items-center gap-3 rounded-lg border border-border p-3 text-left whitespace-normal transition-colors hover:border-fb-300 hover:bg-fb-50"
                   >
                     <span className="grid size-9 place-items-center rounded-md bg-fb-50 text-fb-700">
                       <Folder size={17} />
@@ -446,7 +465,7 @@ export function MediaExplorer({
                         {folderCount(folder.id)} file {folderEdition ? `· Edisi ${folderEdition.year}` : "· Global"}
                       </span>
                     </span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -463,20 +482,22 @@ export function MediaExplorer({
           ) : (
             <div className={viewMode === "grid" ? "grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-3" : "space-y-2 pt-4"}>
               {visibleAssets.map((asset) => (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="default"
                   key={asset.id}
                   onClick={() => setSelectedId(asset.id)}
                   className={
                     viewMode === "grid"
                       ? cn(
-                          "group overflow-hidden rounded-lg border text-left transition-colors",
+                          "group flex h-auto w-full flex-col items-stretch gap-0 overflow-hidden rounded-lg border p-0 text-left whitespace-normal transition-colors",
                           selectedId === asset.id
                             ? "border-fb-400 bg-fb-50/45 ring-2 ring-fb-100"
                             : "border-border bg-white hover:border-dgb-200"
                         )
                       : cn(
-                          "flex w-full items-center gap-3 rounded-md border p-2 text-left transition-colors",
+                          "flex h-auto w-full items-center gap-3 rounded-md border p-2 text-left whitespace-normal transition-colors",
                           selectedId === asset.id ? "border-fb-400 bg-fb-50/45" : "border-border hover:border-dgb-200"
                         )
                   }
@@ -521,7 +542,7 @@ export function MediaExplorer({
                       {selectedId === asset.id ? <Check size={15} className="mr-2 text-fb-600" /> : null}
                     </>
                   )}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -566,12 +587,10 @@ export function MediaExplorer({
                   <input type="hidden" name="assetId" value={selectedAsset.id} />
                   <p className="text-xs font-semibold text-foreground">Metadata aset</p>
                   <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       name="decorative"
                       value="true"
                       defaultChecked={selectedAsset.decorative}
-                      className="size-4 rounded border-input text-dgb focus:ring-dgb"
                     />
                     Tandai sebagai dekoratif
                   </label>
@@ -596,12 +615,16 @@ export function MediaExplorer({
                   <label className="text-xs font-semibold text-foreground" htmlFor="move-folder">
                     Pindahkan ke
                   </label>
-                  <AdminSelect id="move-folder" name="folderId" defaultValue={selectedAsset.folderId ?? ""}>
-                    <option value="">Root media</option>
-                    {flatFolders.map((folder) => (
-                      <option key={folder.id} value={folder.id}>{`${"  ".repeat(folder.depth)}${folder.name}`}</option>
-                    ))}
-                  </AdminSelect>
+                  <AdminSelect
+                    id="move-folder"
+                    aria-label="Folder tujuan"
+                    name="folderId"
+                    defaultValue={selectedAsset.folderId ?? ""}
+                    options={[
+                      { value: "", label: "Root media" },
+                      ...flatFolders.map((folder) => ({ value: folder.id, label: `${"  ".repeat(folder.depth)}${folder.name}` })),
+                    ]}
+                  />
                   <AdminButton type="submit" className="w-full">
                     Pindahkan file
                   </AdminButton>
@@ -634,14 +657,15 @@ export function MediaExplorer({
                     Ubah nama folder
                   </label>
                   <AdminInput id="rename-folder" name="name" defaultValue={currentFolder.name} required maxLength={80} />
-                  <AdminSelect name="editionId" defaultValue={currentFolder.editionId ?? ""}>
-                    <option value="">Folder global</option>
-                    {editions.map((ed) => (
-                      <option key={ed.id} value={ed.id}>
-                        Edisi {ed.year}
-                      </option>
-                    ))}
-                  </AdminSelect>
+                  <AdminSelect
+                    aria-label="Edisi folder"
+                    name="editionId"
+                    defaultValue={currentFolder.editionId ?? ""}
+                    options={[
+                      { value: "", label: "Folder global" },
+                      ...editions.map((ed) => ({ value: ed.id, label: `Edisi ${ed.year}` })),
+                    ]}
+                  />
                   <AdminButton type="submit" variant="secondary" className="w-full">
                     Simpan perubahan
                   </AdminButton>

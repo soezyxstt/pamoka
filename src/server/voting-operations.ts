@@ -1,0 +1,512 @@
+import { and, eq, ne } from "drizzle-orm";
+
+import { formatLocalDate } from "@/lib/voting";
+import { appendAuditLog } from "@/server/auth/audit";
+import type { Database } from "@/server/db/queries";
+import {
+  mediaAssets,
+  participants,
+  selectionStages,
+  voteDailyTallies,
+  votingCampaignParticipants,
+  votingCampaigns,
+} from "@/server/db/schema";
+
+type AuditActor = { userId: string; label: string };
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+const staleCampaignMessage = "Kampanye telah diubah. Muat ulang halaman.";
+
+async function requireCampaign(tx: Transaction, editionId: string, campaignId: string) {
+  const [campaign] = await tx
+    .select()
+    .from(votingCampaigns)
+    .where(
+      and(eq(votingCampaigns.id, campaignId), eq(votingCampaigns.editionId, editionId)),
+    )
+    .limit(1);
+  if (!campaign) throw new Error("Kampanye tidak ditemukan pada edisi aktif");
+  return campaign;
+}
+
+async function requireStage(tx: Transaction, editionId: string, stageId: string) {
+  const [stage] = await tx
+    .select()
+    .from(selectionStages)
+    .where(and(eq(selectionStages.id, stageId), eq(selectionStages.editionId, editionId)))
+    .limit(1);
+  if (!stage) throw new Error("Tahap sumber tidak ditemukan pada edisi aktif");
+  return stage;
+}
+
+function requireReason(reason: string) {
+  const value = reason.trim();
+  if (!value) throw new Error("Alasan tindakan wajib diisi");
+  return value;
+}
+
+function requireExpectedVersion(actual: number, expected: number) {
+  if (!Number.isInteger(expected) || actual !== expected) {
+    throw new Error(staleCampaignMessage);
+  }
+}
+
+function requireLocalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new Error("Tanggal lokal tidak valid");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error("Tanggal lokal tidak valid");
+  }
+}
+
+export async function createVotingCampaign(
+  db: Database,
+  editionId: string,
+  input: {
+    name: string;
+    slug: string;
+    eligibilityStageId: string;
+    startsAt: Date;
+    endsAt: Date;
+    pricePerPoint: number;
+  },
+  actor: AuditActor,
+  now: Date,
+) {
+  const name = input.name.trim();
+  const slug = input.slug.trim().toLowerCase();
+  if (
+    !name ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ||
+    Number.isNaN(input.startsAt.valueOf()) ||
+    Number.isNaN(input.endsAt.valueOf()) ||
+    input.startsAt >= input.endsAt ||
+    !Number.isSafeInteger(input.pricePerPoint) ||
+    input.pricePerPoint <= 0
+  ) {
+    throw new Error("Kampanye voting tidak valid");
+  }
+
+  return db.transaction(async (tx) => {
+    const stage = await requireStage(tx, editionId, input.eligibilityStageId);
+    const [duplicate] = await tx
+      .select({ id: votingCampaigns.id })
+      .from(votingCampaigns)
+      .where(eq(votingCampaigns.slug, slug))
+      .limit(1);
+    if (duplicate) throw new Error("Slug kampanye sudah digunakan");
+
+    const id = crypto.randomUUID();
+    await tx.insert(votingCampaigns).values({
+      id,
+      editionId,
+      eligibilityStageId: stage.id,
+      name,
+      slug,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      pricePerPoint: input.pricePerPoint,
+      status: "draft",
+      resultVisibility: "hidden",
+      version: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await appendAuditLog(tx, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "voting.campaign.create",
+      resourceType: "votingCampaign",
+      resourceId: id,
+      resourceLabel: name,
+      after: {
+        editionId,
+        eligibilityStageId: stage.id,
+        name,
+        slug,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        pricePerPoint: input.pricePerPoint,
+        status: "draft",
+        resultVisibility: "hidden",
+        version: 1,
+      },
+      changedFields: [
+        "editionId",
+        "eligibilityStageId",
+        "name",
+        "slug",
+        "startsAt",
+        "endsAt",
+        "pricePerPoint",
+        "status",
+        "resultVisibility",
+        "version",
+      ],
+      source: "admin-voting",
+    });
+    return { id, version: 1 };
+  });
+}
+
+export async function updateVotingCampaignStage(
+  db: Database,
+  editionId: string,
+  input: { campaignId: string; stageId: string; expectedVersion: number },
+  actor: AuditActor,
+  now: Date,
+) {
+  return db.transaction(async (tx) => {
+    const campaign = await requireCampaign(tx, editionId, input.campaignId);
+    requireExpectedVersion(campaign.version, input.expectedVersion);
+    if (campaign.status !== "draft") {
+      throw new Error("Tahap sumber hanya dapat diubah saat kampanye masih draf");
+    }
+    const stage = await requireStage(tx, editionId, input.stageId);
+    const [snapshot] = await tx
+      .select({ participantId: votingCampaignParticipants.participantId })
+      .from(votingCampaignParticipants)
+      .where(eq(votingCampaignParticipants.campaignId, campaign.id))
+      .limit(1);
+    if (snapshot) throw new Error("Tahap sumber tidak dapat diubah setelah snapshot dibuat");
+
+    const [updated] = await tx
+      .update(votingCampaigns)
+      .set({ eligibilityStageId: stage.id, version: campaign.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(votingCampaigns.id, campaign.id),
+          eq(votingCampaigns.editionId, editionId),
+          eq(votingCampaigns.version, input.expectedVersion),
+        ),
+      )
+      .returning({ id: votingCampaigns.id });
+    if (!updated) throw new Error(staleCampaignMessage);
+    await appendAuditLog(tx, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "voting.campaign.stage.update",
+      resourceType: "votingCampaign",
+      resourceId: campaign.id,
+      resourceLabel: campaign.name,
+      before: { eligibilityStageId: campaign.eligibilityStageId, version: campaign.version },
+      after: { eligibilityStageId: stage.id, version: campaign.version + 1 },
+      changedFields: ["eligibilityStageId", "version"],
+      source: "admin-voting",
+    });
+    return { version: campaign.version + 1 };
+  });
+}
+
+export async function startVotingCampaign(
+  db: Database,
+  editionId: string,
+  input: { campaignId: string; expectedVersion: number; confirmation: string; reason: string },
+  actor: AuditActor,
+  now: Date,
+) {
+  const reason = requireReason(input.reason);
+  return db.transaction(async (tx) => {
+    const campaign = await requireCampaign(tx, editionId, input.campaignId);
+    requireExpectedVersion(campaign.version, input.expectedVersion);
+    if (campaign.status !== "draft") throw new Error("Hanya kampanye draf yang dapat dimulai");
+    if (input.confirmation.trim() !== campaign.name) {
+      throw new Error("Ketik nama kampanye untuk mengonfirmasi");
+    }
+    if (!campaign.eligibilityStageId) throw new Error("Pilih tahap sumber sebelum memulai voting");
+    await requireStage(tx, editionId, campaign.eligibilityStageId);
+
+    const eligible = await tx
+      .select({ participantId: participants.id })
+      .from(participants)
+      .where(
+        and(
+          eq(participants.editionId, editionId),
+          eq(participants.currentStageId, campaign.eligibilityStageId),
+          eq(participants.active, true),
+          ne(participants.selectionStatus, "eliminated"),
+        ),
+      );
+    if (eligible.length === 0) throw new Error("Tahap sumber belum memiliki peserta aktif");
+
+    const existingSnapshot = await tx
+      .select({ participantId: votingCampaignParticipants.participantId })
+      .from(votingCampaignParticipants)
+      .where(eq(votingCampaignParticipants.campaignId, campaign.id));
+    if (existingSnapshot.length > 0) throw new Error("Snapshot kampanye sudah pernah dibuat");
+
+    await tx.insert(votingCampaignParticipants).values(
+      eligible.map((entry) => ({
+        campaignId: campaign.id,
+        participantId: entry.participantId,
+        sourceStageId: campaign.eligibilityStageId,
+        addedAt: now,
+      })),
+    );
+    const [updated] = await tx
+      .update(votingCampaigns)
+      .set({ status: "active", startedAt: now, version: campaign.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(votingCampaigns.id, campaign.id),
+          eq(votingCampaigns.editionId, editionId),
+          eq(votingCampaigns.version, input.expectedVersion),
+        ),
+      )
+      .returning({ id: votingCampaigns.id });
+    if (!updated) throw new Error(staleCampaignMessage);
+    await appendAuditLog(tx, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "voting.campaign.start",
+      resourceType: "votingCampaign",
+      resourceId: campaign.id,
+      resourceLabel: campaign.name,
+      before: { status: campaign.status, version: campaign.version },
+      after: {
+        status: "active",
+        startedAt: now,
+        snapshotCount: eligible.length,
+        sourceStageId: campaign.eligibilityStageId,
+        version: campaign.version + 1,
+      },
+      changedFields: ["status", "startedAt", "snapshot", "version"],
+      source: "admin-voting",
+      reason,
+    });
+    return { version: campaign.version + 1, snapshotCount: eligible.length };
+  });
+}
+
+export async function closeVotingCampaign(
+  db: Database,
+  editionId: string,
+  input: { campaignId: string; expectedVersion: number; confirmation: string; reason: string },
+  actor: AuditActor,
+  now: Date,
+) {
+  const reason = requireReason(input.reason);
+  return db.transaction(async (tx) => {
+    const campaign = await requireCampaign(tx, editionId, input.campaignId);
+    requireExpectedVersion(campaign.version, input.expectedVersion);
+    if (campaign.status !== "active") throw new Error("Hanya kampanye aktif yang dapat ditutup");
+    if (input.confirmation.trim() !== campaign.name) {
+      throw new Error("Ketik nama kampanye untuk mengonfirmasi");
+    }
+    const [updated] = await tx
+      .update(votingCampaigns)
+      .set({ status: "closed", closedAt: now, version: campaign.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(votingCampaigns.id, campaign.id),
+          eq(votingCampaigns.editionId, editionId),
+          eq(votingCampaigns.version, input.expectedVersion),
+        ),
+      )
+      .returning({ id: votingCampaigns.id });
+    if (!updated) throw new Error(staleCampaignMessage);
+    await appendAuditLog(tx, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "voting.campaign.close",
+      resourceType: "votingCampaign",
+      resourceId: campaign.id,
+      resourceLabel: campaign.name,
+      before: { status: campaign.status, version: campaign.version },
+      after: { status: "closed", closedAt: now, version: campaign.version + 1 },
+      changedFields: ["status", "closedAt", "version"],
+      source: "admin-voting",
+      reason,
+    });
+    return { version: campaign.version + 1 };
+  });
+}
+
+export async function setVotingResultVisibility(
+  db: Database,
+  editionId: string,
+  input: {
+    campaignId: string;
+    expectedVersion: number;
+    visibility: "hidden" | "visible";
+    reason: string;
+  },
+  actor: AuditActor,
+  now: Date,
+) {
+  const reason = requireReason(input.reason);
+  if (!(input.visibility === "hidden" || input.visibility === "visible")) {
+    throw new Error("Visibilitas hasil tidak valid");
+  }
+  return db.transaction(async (tx) => {
+    const campaign = await requireCampaign(tx, editionId, input.campaignId);
+    requireExpectedVersion(campaign.version, input.expectedVersion);
+    if (input.visibility === "visible" && campaign.status === "draft") {
+      throw new Error("Hasil kampanye draf belum dapat ditampilkan");
+    }
+    const [updated] = await tx
+      .update(votingCampaigns)
+      .set({
+        resultVisibility: input.visibility,
+        version: campaign.version + 1,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(votingCampaigns.id, campaign.id),
+          eq(votingCampaigns.editionId, editionId),
+          eq(votingCampaigns.version, input.expectedVersion),
+        ),
+      )
+      .returning({ id: votingCampaigns.id });
+    if (!updated) throw new Error(staleCampaignMessage);
+    await appendAuditLog(tx, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: "voting.campaign.visibility.update",
+      resourceType: "votingCampaign",
+      resourceId: campaign.id,
+      resourceLabel: campaign.name,
+      before: { resultVisibility: campaign.resultVisibility, version: campaign.version },
+      after: { resultVisibility: input.visibility, version: campaign.version + 1 },
+      changedFields: ["resultVisibility", "version"],
+      source: "admin-voting",
+      reason,
+    });
+    return { version: campaign.version + 1 };
+  });
+}
+
+export async function saveVotingTally(
+  db: Database,
+  editionId: string,
+  input: {
+    campaignId: string;
+    participantId: string;
+    localDate: string;
+    amount: number;
+    expectedVersion: number;
+    reason: string;
+  },
+  actor: AuditActor,
+  now: Date,
+) {
+  const reason = requireReason(input.reason);
+  requireLocalDate(input.localDate);
+  if (
+    !Number.isSafeInteger(input.amount) ||
+    input.amount < 0 ||
+    !Number.isSafeInteger(input.expectedVersion) ||
+    input.expectedVersion < 0
+  ) {
+    throw new Error("Tally tidak valid");
+  }
+
+  return db.transaction(async (tx) => {
+    const campaign = await requireCampaign(tx, editionId, input.campaignId);
+    if (campaign.status !== "active") throw new Error("Tally hanya dapat diubah saat voting aktif");
+    const [snapshot] = await tx
+      .select({
+        participantId: votingCampaignParticipants.participantId,
+        name: participants.name,
+        qrisMediaId: participants.qrisMediaId,
+        mimeType: mediaAssets.mimeType,
+        lifecycle: mediaAssets.lifecycle,
+      })
+      .from(votingCampaignParticipants)
+      .innerJoin(participants, eq(participants.id, votingCampaignParticipants.participantId))
+      .leftJoin(mediaAssets, eq(mediaAssets.id, participants.qrisMediaId))
+      .where(
+        and(
+          eq(votingCampaignParticipants.campaignId, campaign.id),
+          eq(votingCampaignParticipants.participantId, input.participantId),
+          eq(participants.editionId, editionId),
+        ),
+      )
+      .limit(1);
+    if (!snapshot) throw new Error("Peserta tidak ada pada snapshot kampanye");
+    if (
+      !snapshot.qrisMediaId ||
+      snapshot.lifecycle !== "ready" ||
+      !snapshot.mimeType?.startsWith("image/")
+    ) {
+      throw new Error("Peserta belum memiliki gambar QRIS yang siap");
+    }
+
+    const firstDate = formatLocalDate(campaign.startsAt, campaign.timezone);
+    const lastDate = formatLocalDate(campaign.endsAt, campaign.timezone);
+    if (input.localDate < firstDate || input.localDate > lastDate) {
+      throw new Error("Tanggal tally berada di luar periode kampanye");
+    }
+
+    const [before] = await tx
+      .select()
+      .from(voteDailyTallies)
+      .where(
+        and(
+          eq(voteDailyTallies.campaignId, campaign.id),
+          eq(voteDailyTallies.participantId, input.participantId),
+          eq(voteDailyTallies.localDate, input.localDate),
+        ),
+      )
+      .limit(1);
+    if ((before?.version ?? 0) !== input.expectedVersion) {
+      throw new Error("Tally telah diubah. Muat ulang halaman.");
+    }
+
+    const id = before?.id ?? crypto.randomUUID();
+    const nextVersion = (before?.version ?? 0) + 1;
+    if (before) {
+      const [updated] = await tx
+        .update(voteDailyTallies)
+        .set({ amount: input.amount, version: nextVersion, updatedAt: now })
+        .where(
+          and(
+            eq(voteDailyTallies.id, before.id),
+            eq(voteDailyTallies.version, input.expectedVersion),
+          ),
+        )
+        .returning({ id: voteDailyTallies.id });
+      if (!updated) throw new Error("Tally telah diubah. Muat ulang halaman.");
+    } else {
+      await tx.insert(voteDailyTallies).values({
+        id,
+        campaignId: campaign.id,
+        participantId: input.participantId,
+        localDate: input.localDate,
+        amount: input.amount,
+        version: nextVersion,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    await appendAuditLog(tx, {
+      actorUserId: actor.userId,
+      actorLabel: actor.label,
+      action: before ? "voting.tally.correct" : "voting.tally.create",
+      resourceType: "voteDailyTally",
+      resourceId: id,
+      resourceLabel: snapshot.name,
+      before: before ? { amount: before.amount, version: before.version } : null,
+      after: {
+        campaignId: campaign.id,
+        participantId: input.participantId,
+        localDate: input.localDate,
+        amount: input.amount,
+        version: nextVersion,
+      },
+      changedFields: ["amount", "version"],
+      source: "admin-voting",
+      reason,
+    });
+    return { id, version: nextVersion };
+  });
+}

@@ -1,18 +1,14 @@
 "use client";
 
 import {
-  Building2,
   Calendar,
   ChevronRight,
   Edit2,
-  ExternalLink,
-  Globe,
   Layers,
   Link2,
   Loader2,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   User,
   UserCheck,
@@ -35,6 +31,7 @@ import {
   AdminSelect,
   AdminTextarea,
 } from "@/components/admin/primitives";
+import { adminNativeScrollbarClassName } from "@/components/admin/admin-scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,13 +60,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
   createPeriodAction,
   deletePeriodAction,
   deletePersonAction,
   mapLegacyAssignmentAction,
-  PERIOD_LIFECYCLES,
   savePersonAction,
   updatePeriodAction,
 } from "./actions";
@@ -137,7 +142,6 @@ export type OrganizationWorkspaceProps = {
   legacyAssignments: LegacyAssignmentItem[];
   allUnits: UnitOption[];
   canEdit?: boolean;
-  canPublish?: boolean;
   canManageMedia?: boolean;
 };
 
@@ -157,9 +161,8 @@ export function OrganizationWorkspace({
   peopleList,
   legacyAssignments,
   allUnits,
-  canEdit = true,
-  canPublish = true,
-  canManageMedia = true,
+  canEdit = false,
+  canManageMedia = false,
 }: OrganizationWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"periods" | "people" | "legacy">("periods");
   const [isPending, startTransition] = useTransition();
@@ -249,6 +252,7 @@ export function OrganizationWorkspace({
       try {
         const formData = new FormData();
         formData.append("id", deletingPeriod.id);
+        formData.append("version", String(deletingPeriod.version));
         await deletePeriodAction(formData);
         toast.success("Periode kepengurusan berhasil dihapus");
         setDeletingPeriod(null);
@@ -319,13 +323,16 @@ export function OrganizationWorkspace({
 
     // Validate social links
     for (const s of personSocials) {
-      if (s.url && !s.url.startsWith("https://")) {
-        toast.error("Tautan sosial media harus diawali dengan https://");
-        return;
-      }
-      if (s.platform === "other" && !s.label.trim()) {
-        toast.error("Label platform lainnya wajib diisi");
-        return;
+      const trimmedUrl = s.url.trim();
+      if (trimmedUrl) {
+        if (!trimmedUrl.startsWith("https://")) {
+          toast.error("Tautan sosial media harus diawali dengan https://");
+          return;
+        }
+        if (s.platform === "other" && !s.label.trim()) {
+          toast.error("Label platform lainnya wajib diisi");
+          return;
+        }
       }
     }
 
@@ -335,7 +342,7 @@ export function OrganizationWorkspace({
         formData.append("name", personName.trim());
         if (personSlug.trim()) formData.append("slug", personSlug.trim());
         if (personShortBio.trim()) formData.append("shortBio", personShortBio.trim());
-        if (personPortraitAsset?.id) formData.append("portraitMediaId", personPortraitAsset.id);
+        formData.append("portraitMediaId", personPortraitAsset?.id ?? "");
 
         const validSocials = personSocials
           .filter((s) => s.url.trim().length > 0)
@@ -368,6 +375,7 @@ export function OrganizationWorkspace({
       try {
         const formData = new FormData();
         formData.append("id", deletingPerson.id);
+        formData.append("version", String(deletingPerson.version));
         await deletePersonAction(formData);
         toast.success("Profil berhasil dihapus dari direktori");
         setDeletingPerson(null);
@@ -435,13 +443,17 @@ export function OrganizationWorkspace({
   return (
     <div className="space-y-6">
       {/* Navigation Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-dgb-100 pb-2">
-        <div className="flex items-center gap-2">
-          <button
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-2">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Bagian kepengurusan">
+          <Button
             type="button"
+            variant="ghost"
+            size="default"
+            role="tab"
+            aria-selected={activeTab === "periods"}
             onClick={() => setActiveTab("periods")}
             className={cn(
-              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors",
+              "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors sm:px-4",
               activeTab === "periods"
                 ? "bg-dgb text-white shadow-xs"
                 : "text-muted-foreground hover:bg-dgb-50 hover:text-dgb-900"
@@ -449,16 +461,20 @@ export function OrganizationWorkspace({
           >
             <Calendar size={16} />
             <span>Periode kepengurusan</span>
-            <span className={cn("ml-1 rounded-full px-2 py-0.5 text-xs font-bold", activeTab === "periods" ? "bg-white/20 text-white" : "bg-muted text-foreground")}>
+            <span className={cn("ml-1 rounded-sm px-2 py-0.5 text-xs font-bold", activeTab === "periods" ? "bg-white/20 text-white" : "bg-muted text-foreground")}>
               {periods.length}
             </span>
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="default"
+            role="tab"
+            aria-selected={activeTab === "people"}
             onClick={() => setActiveTab("people")}
             className={cn(
-              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors",
+              "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors sm:px-4",
               activeTab === "people"
                 ? "bg-dgb text-white shadow-xs"
                 : "text-muted-foreground hover:bg-dgb-50 hover:text-dgb-900"
@@ -466,16 +482,20 @@ export function OrganizationWorkspace({
           >
             <Users size={16} />
             <span>Direktori profil</span>
-            <span className={cn("ml-1 rounded-full px-2 py-0.5 text-xs font-bold", activeTab === "people" ? "bg-white/20 text-white" : "bg-muted text-foreground")}>
+            <span className={cn("ml-1 rounded-sm px-2 py-0.5 text-xs font-bold", activeTab === "people" ? "bg-white/20 text-white" : "bg-muted text-foreground")}>
               {peopleList.length}
             </span>
-          </button>
+          </Button>
 
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="default"
+            role="tab"
+            aria-selected={activeTab === "legacy"}
             onClick={() => setActiveTab("legacy")}
             className={cn(
-              "flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors",
+              "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition-colors sm:px-4",
               activeTab === "legacy"
                 ? "bg-dgb text-white shadow-xs"
                 : "text-muted-foreground hover:bg-dgb-50 hover:text-dgb-900"
@@ -484,11 +504,11 @@ export function OrganizationWorkspace({
             <Layers size={16} />
             <span>Perlu dipetakan</span>
             {unmappedCount > 0 ? (
-              <span className={cn("ml-1 rounded-full px-2 py-0.5 text-xs font-bold", activeTab === "legacy" ? "bg-fb text-white" : "bg-fb-100 text-fb-800")}>
+              <span className={cn("ml-1 rounded-sm px-2 py-0.5 text-xs font-bold", activeTab === "legacy" ? "bg-fb text-white" : "bg-fb-100 text-fb-800")}>
                 {unmappedCount}
               </span>
             ) : null}
-          </button>
+          </Button>
         </div>
 
         {activeTab === "periods" && canEdit ? (
@@ -508,12 +528,12 @@ export function OrganizationWorkspace({
       {activeTab === "periods" && (
         <div className="space-y-4">
           {periods.length === 0 ? (
-            <AdminCard>
+            <AdminCard padding="none">
               <div className="p-8">
                 <AdminEmptyState
                   icon="building"
                   title="Belum ada periode kepengurusan"
-                  description="Buat periode kepengurusan untuk mengatur visi, misi, struktur unit hierarkis, dan penugasan pengurus."
+                  description="Buat periode pertama untuk mulai menyusun kepengurusan."
                 />
                 {canEdit ? (
                   <div className="mt-4 flex justify-center">
@@ -527,18 +547,10 @@ export function OrganizationWorkspace({
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {periods.map((p) => {
-                let missionCount = 0;
-                try {
-                  const m = JSON.parse(p.missionJson);
-                  if (Array.isArray(m)) missionCount = m.length;
-                } catch {
-                  missionCount = 0;
-                }
-
                 return (
-                  <div
+                  <AdminCard
                     key={p.id}
-                    className="flex flex-col justify-between rounded-xl border border-dgb-100 bg-white p-5 shadow-xs transition-shadow hover:shadow-md"
+                    className="flex flex-col justify-between transition-shadow hover:shadow-md"
                   >
                     <div>
                       <div className="flex items-start justify-between gap-3">
@@ -553,22 +565,26 @@ export function OrganizationWorkspace({
                         </div>
                         {canEdit ? (
                           <div className="flex items-center gap-1">
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => openEditPeriod(p)}
-                              className="rounded-md p-1.5 text-muted-foreground hover:bg-dgb-50 hover:text-dgb-900"
+                              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-dgb-50 hover:text-dgb-900"
                               title="Edit metadata periode"
                             >
                               <Edit2 size={14} />
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={() => setDeletingPeriod(p)}
-                              className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
+                              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
                               title="Hapus periode"
                             >
                               <Trash2 size={14} />
-                            </button>
+                            </Button>
                           </div>
                         ) : null}
                       </div>
@@ -597,15 +613,17 @@ export function OrganizationWorkspace({
                     </div>
 
                     <div className="mt-5 border-t border-border pt-3">
-                      <Link
-                        href={`/admin/organization/periods/${p.id}`}
-                        className="flex w-full items-center justify-between rounded-md bg-dgb px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-dgb-600"
+                      <Button
+                        asChild
+                        className="h-auto w-full justify-between rounded-md bg-dgb px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-dgb-600"
                       >
-                        <span>Kelola struktur unit & pengurus</span>
-                        <ChevronRight size={14} />
-                      </Link>
+                        <Link href={`/admin/organization/periods/${p.id}`}>
+                          <span>Kelola struktur unit dan pengurus</span>
+                          <ChevronRight size={14} />
+                        </Link>
+                      </Button>
                     </div>
-                  </div>
+                  </AdminCard>
                 );
               })}
             </div>
@@ -634,7 +652,7 @@ export function OrganizationWorkspace({
           </div>
 
           {filteredPeople.length === 0 ? (
-            <AdminCard>
+            <AdminCard padding="none">
               <div className="p-8">
                 <AdminEmptyState
                   icon="users"
@@ -646,9 +664,9 @@ export function OrganizationWorkspace({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {filteredPeople.map((person) => (
-                <div
+                <AdminCard
                   key={person.id}
-                  className="flex flex-col justify-between rounded-xl border border-dgb-100 bg-white p-4 shadow-xs transition-shadow hover:shadow-md"
+                  className="flex flex-col justify-between p-4 transition-shadow hover:shadow-md"
                 >
                   <div>
                     <div className="flex items-start gap-3">
@@ -730,7 +748,7 @@ export function OrganizationWorkspace({
                       </Button>
                     </div>
                   ) : null}
-                </div>
+                </AdminCard>
               ))}
             </div>
           )}
@@ -743,70 +761,70 @@ export function OrganizationWorkspace({
       {activeTab === "legacy" && (
         <div className="space-y-4">
           <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900">
-            <p className="font-semibold">Informasi Pemetaan Data Lama (Legacy)</p>
+            <p className="font-semibold">Pemetaan data lama</p>
             <p className="mt-1 leading-relaxed">
-              Daftar di bawah ini memuat penugasan organisasi dari skema awal (<code>organizationAssignments</code>). Anda dapat memetakan jabatan ini ke dalam Periode dan Unit modern tanpa kehilangan riwayat orang.
+              Hubungkan penugasan lama ke periode dan unit tanpa menghapus riwayatnya.
             </p>
           </div>
 
           {legacyAssignments.length === 0 ? (
-            <AdminCard>
+            <AdminCard padding="none">
               <div className="p-8">
                 <AdminEmptyState
-                  icon="sparkles"
-                  title="Tidak ada data legacy"
-                  description="Seluruh penugasan pengurus telah terdaftar di struktur organisasi modern."
+                  icon="building"
+                  title="Tidak ada data lama"
+                  description="Semua penugasan sudah dipetakan."
                 />
               </div>
             </AdminCard>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-border bg-white">
-              <table className="w-full text-left text-xs">
-                <thead className="border-b border-border bg-muted/40 font-semibold text-muted-foreground">
-                  <tr>
-                    <th className="p-3">Nama Pengurus</th>
-                    <th className="p-3">Jabatan Lama</th>
-                    <th className="p-3">Grup / Kelompok</th>
-                    <th className="p-3">Label Masa Jabatan</th>
-                    <th className="p-3">Status Pemetaan</th>
-                    <th className="p-3 text-right">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {legacyAssignments.map((legacy) => (
-                    <tr key={legacy.id} className="hover:bg-muted/20">
-                      <td className="p-3 font-semibold text-dgb-900">{legacy.personName}</td>
-                      <td className="p-3 font-medium text-foreground">{legacy.title}</td>
-                      <td className="p-3 text-muted-foreground">{legacy.group}</td>
-                      <td className="p-3 text-muted-foreground">{legacy.termLabel || "-"}</td>
-                      <td className="p-3">
-                        {legacy.isMapped ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
-                            <UserCheck size={12} /> Sudah dipetakan
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-200">
-                            Perlu dipetakan
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        {canEdit ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => openMapDialog(legacy)}
-                            className="h-7 bg-dgb px-3 text-xs text-white hover:bg-dgb-600"
-                          >
-                            Petakan
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <AdminCard padding="none" className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table className="text-xs">
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead>Nama pengurus</TableHead>
+                      <TableHead>Jabatan lama</TableHead>
+                      <TableHead>Kelompok</TableHead>
+                      <TableHead>Masa jabatan</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {legacyAssignments.map((legacy) => (
+                      <TableRow key={legacy.id}>
+                        <TableCell className="font-semibold text-dgb-900">{legacy.personName}</TableCell>
+                        <TableCell className="font-medium text-foreground">{legacy.title}</TableCell>
+                        <TableCell className="text-muted-foreground">{legacy.group}</TableCell>
+                        <TableCell className="text-muted-foreground">{legacy.termLabel || "-"}</TableCell>
+                        <TableCell>
+                          {legacy.isMapped ? (
+                            <Badge variant="outline" className="gap-1 rounded-md border-emerald-200 bg-emerald-50 text-emerald-800">
+                              <UserCheck size={12} /> Sudah dipetakan
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="rounded-md border-amber-200 bg-amber-50 text-amber-800">
+                              Perlu dipetakan
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {canEdit ? (
+                            <AdminButton
+                              onClick={() => openMapDialog(legacy)}
+                              className="h-7 px-3 text-xs"
+                            >
+                              Petakan
+                            </AdminButton>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </AdminCard>
           )}
         </div>
       )}
@@ -815,13 +833,13 @@ export function OrganizationWorkspace({
       {/* SHEET: BUAT / EDIT PERIODE */}
       {/* ========================================================================= */}
       <Sheet open={isPeriodSheetOpen} onOpenChange={setIsPeriodSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent side="right" className={cn("w-full sm:max-w-lg overflow-y-auto", adminNativeScrollbarClassName)}>
           <SheetHeader className="border-b border-border pb-4">
             <SheetTitle className="font-montserrat text-lg font-bold text-dgb-900">
               {editingPeriod ? "Edit Periode Kepengurusan" : "Buat Periode Baru"}
             </SheetTitle>
             <SheetDescription className="text-xs text-muted-foreground">
-              Konfigurasi label periode, rentang tahun kerja, visi, serta poin-poin misi organisasi.
+              Atur masa bakti dan arah organisasi.
             </SheetDescription>
           </SheetHeader>
 
@@ -854,12 +872,13 @@ export function OrganizationWorkspace({
             <AdminField label="Status siklus periode">
               <AdminSelect
                 value={periodLifecycle}
-                onChange={(e) => setPeriodLifecycle(e.target.value as PeriodLifecycle)}
-              >
-                <option value="draft">Draft (Konseptual)</option>
-                <option value="active">Active (Sedang Berjalan)</option>
-                <option value="archived">Archived (Arsip / Demisioner)</option>
-              </AdminSelect>
+                onValueChange={(nextLifecycle) => setPeriodLifecycle(nextLifecycle as PeriodLifecycle)}
+                options={[
+                  { value: "draft", label: "Draft (Konseptual)" },
+                  { value: "active", label: "Active (Sedang Berjalan)" },
+                  { value: "archived", label: "Archived (Arsip / Demisioner)" },
+                ]}
+              />
             </AdminField>
 
             <AdminField label="Visi organisasi">
@@ -874,13 +893,15 @@ export function OrganizationWorkspace({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">Daftar Misi Organisasi</span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setPeriodMissions([...periodMissions, ""])}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-dgb hover:underline"
+                  className="h-auto rounded-none px-0 py-0 text-xs font-semibold text-dgb hover:underline"
                 >
                   <Plus size={13} /> Tambah misi
-                </button>
+                </Button>
               </div>
               <div className="space-y-2">
                 {periodMissions.map((m, idx) => (
@@ -899,14 +920,16 @@ export function OrganizationWorkspace({
                       className="text-xs"
                     />
                     {periodMissions.length > 1 ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setPeriodMissions(periodMissions.filter((_, i) => i !== idx))}
-                        className="p-1 text-muted-foreground hover:text-rose-600"
+                        className="size-7 rounded-md p-0 text-muted-foreground hover:text-rose-600"
                         title="Hapus poin misi"
                       >
                         <Trash2 size={14} />
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                 ))}
@@ -935,7 +958,7 @@ export function OrganizationWorkspace({
       {/* SHEET: BUAT / EDIT PROFIL ORANG */}
       {/* ========================================================================= */}
       <Sheet open={isPersonSheetOpen} onOpenChange={setIsPersonSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent side="right" className={cn("w-full sm:max-w-lg overflow-y-auto", adminNativeScrollbarClassName)}>
           <SheetHeader className="border-b border-border pb-4">
             <SheetTitle className="font-montserrat text-lg font-bold text-dgb-900">
               {editingPerson ? "Edit Profil Orang" : "Tambah Profil Baru"}
@@ -985,18 +1008,20 @@ export function OrganizationWorkspace({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">Tautan Sosial Media</span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() =>
                     setPersonSocials([
                       ...personSocials,
                       { platform: "instagram", label: "", url: "" },
                     ])
                   }
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-dgb hover:underline"
+                  className="h-auto rounded-none px-0 py-0 text-xs font-semibold text-dgb hover:underline"
                 >
                   <Plus size={13} /> Tambah sosmed
-                </button>
+                </Button>
               </div>
 
               {personSocials.length === 0 ? (
@@ -1006,21 +1031,20 @@ export function OrganizationWorkspace({
                   {personSocials.map((s, idx) => (
                     <div key={idx} className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 p-2.5">
                       <div className="flex items-center justify-between gap-2">
-                        <select
+                        <AdminSelect
+                          aria-label="Platform sosial"
                           value={s.platform}
-                          onChange={(e) => {
+                          onValueChange={(value) => {
                             const updated = [...personSocials];
-                            updated[idx].platform = e.target.value as SocialPlatform;
+                            updated[idx].platform = value as SocialPlatform;
                             setPersonSocials(updated);
                           }}
-                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-                        >
-                          {SOCIAL_PLATFORMS_LIST.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                          className="h-8 w-auto min-w-[8rem] px-2 text-xs data-[size=default]:h-8"
+                          options={SOCIAL_PLATFORMS_LIST.map((opt) => ({
+                            value: opt.value,
+                            label: opt.label,
+                          }))}
+                        />
 
                         {s.platform === "other" ? (
                           <AdminInput
@@ -1035,13 +1059,15 @@ export function OrganizationWorkspace({
                           />
                         ) : null}
 
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => setPersonSocials(personSocials.filter((_, i) => i !== idx))}
-                          className="p-1 text-muted-foreground hover:text-rose-600"
+                          className="size-7 rounded-md p-0 text-muted-foreground hover:text-rose-600"
                         >
                           <Trash2 size={14} />
-                        </button>
+                        </Button>
                       </div>
 
                       <AdminInput
@@ -1102,18 +1128,16 @@ export function OrganizationWorkspace({
               <AdminField label="Periode tujuan">
                 <AdminSelect
                   value={mapTargetPeriodId}
-                  onChange={(e) => {
-                    setMapTargetPeriodId(e.target.value);
-                    const units = allUnits.filter((u) => u.periodId === e.target.value);
+                  onValueChange={(nextPeriodId) => {
+                    setMapTargetPeriodId(nextPeriodId);
+                    const units = allUnits.filter((u) => u.periodId === nextPeriodId);
                     setMapTargetUnitId(units.length > 0 ? units[0].id : "");
                   }}
-                >
-                  {periods.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label} ({p.startYear} - {p.endYear})
-                    </option>
-                  ))}
-                </AdminSelect>
+                  options={periods.map((p) => ({
+                    value: p.id,
+                    label: `${p.label} (${p.startYear} - ${p.endYear})`,
+                  }))}
+                />
               </AdminField>
 
               <AdminField label="Unit kerja tujuan">
@@ -1124,14 +1148,9 @@ export function OrganizationWorkspace({
                 ) : (
                   <AdminSelect
                     value={mapTargetUnitId}
-                    onChange={(e) => setMapTargetUnitId(e.target.value)}
-                  >
-                    {availableUnitsForPeriod.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </AdminSelect>
+                    onValueChange={setMapTargetUnitId}
+                    options={availableUnitsForPeriod.map((u) => ({ value: u.id, label: u.name }))}
+                  />
                 )}
               </AdminField>
 

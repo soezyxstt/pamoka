@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 
-import { AdminBadge, AdminCard, AdminCardHeader, AdminEmptyState, AdminPage } from "@/components/admin/primitives";
+import { AdminCard, AdminCardHeader, AdminEmptyState, AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
 import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
@@ -21,8 +21,7 @@ export const metadata = { title: "Panitia" };
 
 export default async function CommitteePage() {
   const { effectivePermissions } = await requirePermission("content.view");
-  const canEdit = effectivePermissions.has("content.edit") || effectivePermissions.has("people.manage");
-  const canPublish = effectivePermissions.has("content.publish");
+  const canEdit = effectivePermissions.has("content.edit");
   const edition = await getAdminEditionContext();
 
   if (!edition) {
@@ -30,18 +29,18 @@ export default async function CommitteePage() {
       <AdminPage
         eyebrow="Konten / struktur"
         title="Panitia"
-        description="Kelola susunan panitia per edisi dengan unit berjenjang dan profil terhubung."
+        description="Pilih edisi untuk mengelola panitia."
       >
         <AdminCard>
           <AdminCardHeader
             eyebrow="Konteks edisi"
             title="Belum ada edisi aktif"
-            description="Pilih atau aktifkan edisi melalui selector di header untuk mengelola struktur dan penugasan panitia."
+            description="Pilih edisi dari header."
           />
           <AdminEmptyState
             icon="clipboard"
             title="Tidak ada edisi terpilih"
-            description="Silakan pilih edisi terlebih dahulu melalui pemilih edisi pada bilah navigasi atas."
+            description="Belum ada edisi terpilih."
           />
         </AdminCard>
       </AdminPage>
@@ -128,7 +127,7 @@ export default async function CommitteePage() {
     <AdminPage
       eyebrow="Konten / struktur"
       title="Panitia"
-      description="Kelola susunan panitia per edisi dengan unit berjenjang dan profil terhubung."
+      description="Struktur dan penugasan untuk edisi terpilih."
     >
       <CommitteeWorkspaceClient
         edition={edition}
@@ -136,7 +135,6 @@ export default async function CommitteePage() {
         initialMembers={members}
         initialPeople={peopleOptions}
         canEdit={canEdit}
-        canPublish={canPublish}
       />
     </AdminPage>
   );

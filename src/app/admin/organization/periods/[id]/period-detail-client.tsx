@@ -4,28 +4,17 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
-  Building,
-  Building2,
-  Calendar,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Edit2,
-  Eye,
   FolderTree,
-  Layers,
   LayoutGrid,
   Loader2,
   Plus,
-  Power,
-  PowerOff,
   Search,
-  Sparkles,
   Trash2,
   User,
-  UserCheck,
   UserPlus,
-  Users,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,13 +25,13 @@ import {
   AdminBadge,
   AdminButton,
   AdminCard,
-  AdminCardHeader,
   AdminEmptyState,
   AdminField,
   AdminInput,
   AdminSelect,
   AdminTextarea,
 } from "@/components/admin/primitives";
+import { adminNativeScrollbarClassName } from "@/components/admin/admin-scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +43,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -74,10 +64,10 @@ import { cn } from "@/lib/utils";
 import {
   assignMemberAction,
   createUnitAction,
-  deletePeriodAction,
   deleteUnitAction,
   reorderUnitsAction,
   removeMembershipAction,
+  setPeriodEditionsAction,
   updateMembershipAction,
   updatePeriodAction,
   updateUnitAction,
@@ -126,7 +116,11 @@ export type ConnectedEdition = {
   name: string;
   slug: string;
   lifecycle: string;
+  organizationPeriodId: string | null;
+  organizationPeriodLabel: string | null;
 };
+
+export type AvailableEdition = ConnectedEdition;
 
 export type PersonOption = {
   id: string;
@@ -140,9 +134,9 @@ export type PeriodDetailClientProps = {
   units: DetailUnit[];
   members: DetailMember[];
   connectedEditions: ConnectedEdition[];
+  availableEditions: AvailableEdition[];
   peopleOptions: PersonOption[];
   canEdit?: boolean;
-  canPublish?: boolean;
 };
 
 export type TreeNode = DetailUnit & {
@@ -156,9 +150,9 @@ export function PeriodDetailClient({
   units,
   members,
   connectedEditions,
+  availableEditions,
   peopleOptions,
   canEdit = true,
-  canPublish = true,
 }: PeriodDetailClientProps) {
   const [isPending, startTransition] = useTransition();
 
@@ -232,6 +226,47 @@ export function PeriodDetailClient({
   const [unitDisplayOrder, setUnitDisplayOrder] = useState<number>(0);
   const [unitActive, setUnitActive] = useState<boolean>(true);
   const [deletingUnit, setDeletingUnit] = useState<DetailUnit | null>(null);
+  const disabledParentUnitIds = useMemo(() => {
+    const disabled = new Set<string>();
+    if (!editingUnit) {
+      for (const unit of units) {
+        if ((unitDepthMap.get(unit.id) ?? 1) >= 4) disabled.add(unit.id);
+      }
+      return disabled;
+    }
+
+    const childrenByParent = new Map<string, string[]>();
+    for (const unit of units) {
+      if (!unit.parentId) continue;
+      const children = childrenByParent.get(unit.parentId) ?? [];
+      children.push(unit.id);
+      childrenByParent.set(unit.parentId, children);
+    }
+
+    const descendants = new Set<string>();
+    const collectDescendants = (unitId: string) => {
+      for (const childId of childrenByParent.get(unitId) ?? []) {
+        if (descendants.has(childId)) continue;
+        descendants.add(childId);
+        collectDescendants(childId);
+      }
+    };
+    collectDescendants(editingUnit.id);
+
+    const subtreeHeight = (unitId: string): number => {
+      const children = childrenByParent.get(unitId) ?? [];
+      return children.length === 0 ? 0 : 1 + Math.max(...children.map(subtreeHeight));
+    };
+    const editingSubtreeHeight = subtreeHeight(editingUnit.id);
+
+    for (const unit of units) {
+      const nextDepth = (unitDepthMap.get(unit.id) ?? 1) + 1 + editingSubtreeHeight;
+      if (unit.id === editingUnit.id || descendants.has(unit.id) || nextDepth > 4) {
+        disabled.add(unit.id);
+      }
+    }
+    return disabled;
+  }, [editingUnit, unitDepthMap, units]);
 
   const openCreateRootUnit = () => {
     setEditingUnit(null);
@@ -320,11 +355,13 @@ export function PeriodDetailClient({
     const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (targetIndex < 0 || targetIndex >= siblingUnits.length) return;
 
-    const targetSibling = siblingUnits[targetIndex];
-    const itemsToReorder = [
-      { id: unit.id, displayOrder: targetSibling.displayOrder },
-      { id: targetSibling.id, displayOrder: unit.displayOrder },
-    ];
+    const reorderedSiblings = [...siblingUnits];
+    const movedUnit = reorderedSiblings.splice(currentIndex, 1)[0]!;
+    reorderedSiblings.splice(targetIndex, 0, movedUnit);
+    const itemsToReorder = reorderedSiblings.map((sibling, index) => ({
+      id: sibling.id,
+      displayOrder: index,
+    }));
 
     startTransition(async () => {
       try {
@@ -429,6 +466,58 @@ export function PeriodDetailClient({
     });
   };
 
+  const [isEditionDialogOpen, setIsEditionDialogOpen] = useState(false);
+  const [selectedEditionIds, setSelectedEditionIds] = useState<string[]>(() =>
+    connectedEditions.map((edition) => edition.id)
+  );
+  const [confirmedReassignmentIds, setConfirmedReassignmentIds] = useState<string[]>([]);
+  const conflictingSelections = availableEditions.filter(
+    (edition) =>
+      selectedEditionIds.includes(edition.id) &&
+      edition.organizationPeriodId !== null &&
+      edition.organizationPeriodId !== period.id
+  );
+  const everyConflictConfirmed = conflictingSelections.every((edition) =>
+    confirmedReassignmentIds.includes(edition.id)
+  );
+
+  const openEditionDialog = () => {
+    setSelectedEditionIds(connectedEditions.map((edition) => edition.id));
+    setConfirmedReassignmentIds([]);
+    setIsEditionDialogOpen(true);
+  };
+
+  const toggleEdition = (editionId: string, checked: boolean) => {
+    setSelectedEditionIds((current) =>
+      checked ? [...new Set([...current, editionId])] : current.filter((id) => id !== editionId)
+    );
+    if (!checked) {
+      setConfirmedReassignmentIds((current) => current.filter((id) => id !== editionId));
+    }
+  };
+
+  const handleSaveEditions = () => {
+    if (!everyConflictConfirmed) {
+      toast.error("Konfirmasi setiap edisi yang akan dipindahkan");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("periodId", period.id);
+        formData.append("periodVersion", String(period.version));
+        formData.append("editionIds", JSON.stringify(selectedEditionIds));
+        formData.append("confirmedReassignmentIds", JSON.stringify(confirmedReassignmentIds));
+        await setPeriodEditionsAction(formData);
+        toast.success("Edisi terhubung diperbarui");
+        setIsEditionDialogOpen(false);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Gagal memperbarui edisi");
+      }
+    });
+  };
+
   // -------------------------------------------------------------------------
   // Edit Period Metadata Modal
   // -------------------------------------------------------------------------
@@ -475,6 +564,16 @@ export function PeriodDetailClient({
     });
   };
 
+  const moveMission = (index: number, direction: "up" | "down") => {
+    setEditMissions((current) => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+      return reordered;
+    });
+  };
+
   // Missions array for display
   const missionsList: string[] = useMemo(() => {
     try {
@@ -493,13 +592,15 @@ export function PeriodDetailClient({
           href="/admin/organization"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-dgb hover:underline"
         >
-          <ArrowLeft size={14} /> Kembali ke daftar kepengurusan
+          <ArrowLeft size={14} /> Kembali
         </Link>
 
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-border bg-muted p-0.5">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveView("tree")}
               className={cn(
                 "flex items-center gap-1 rounded-xs px-2.5 py-1 text-xs font-semibold transition-colors",
@@ -507,9 +608,11 @@ export function PeriodDetailClient({
               )}
             >
               <FolderTree size={13} /> Struktur Tree
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setActiveView("visual")}
               className={cn(
                 "flex items-center gap-1 rounded-xs px-2.5 py-1 text-xs font-semibold transition-colors",
@@ -517,7 +620,7 @@ export function PeriodDetailClient({
               )}
             >
               <LayoutGrid size={13} /> Bagan Visual
-            </button>
+            </Button>
           </div>
 
           {canEdit ? (
@@ -571,7 +674,20 @@ export function PeriodDetailClient({
             ) : null}
 
             <div className="rounded-lg bg-dgb-50/50 p-3 text-xs">
-              <p className="font-semibold text-dgb">Edisi Pasanggiri Terhubung:</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-dgb">Edisi terhubung</p>
+                {canEdit ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={openEditionDialog}
+                    className="h-7 px-2 text-[11px] text-dgb hover:bg-dgb-100"
+                  >
+                    Atur
+                  </Button>
+                ) : null}
+              </div>
               {connectedEditions.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground italic mt-0.5">Belum ada edisi terhubung.</p>
               ) : (
@@ -606,7 +722,7 @@ export function PeriodDetailClient({
           </div>
 
           {treeRoots.length === 0 ? (
-            <AdminCard>
+            <AdminCard padding="none">
               <div className="p-8">
                 <AdminEmptyState
                   icon="building"
@@ -624,7 +740,7 @@ export function PeriodDetailClient({
             </AdminCard>
           ) : (
             <div className="space-y-3">
-              {treeRoots.map((root) => (
+              {treeRoots.map((root, index) => (
                 <UnitTreeRow
                   key={root.id}
                   node={root}
@@ -636,6 +752,8 @@ export function PeriodDetailClient({
                   onEditMember={openEditMember}
                   onDeleteMember={(m) => setDeletingMember(m)}
                   canEdit={canEdit}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < treeRoots.length - 1}
                 />
               ))}
             </div>
@@ -667,11 +785,92 @@ export function PeriodDetailClient({
         </div>
       )}
 
+      <Dialog open={isEditionDialogOpen} onOpenChange={setIsEditionDialogOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-montserrat text-lg font-bold text-dgb-900">
+              Edisi terhubung
+            </DialogTitle>
+            <DialogDescription>Pilih edisi untuk periode ini.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            {availableEditions.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                Belum ada edisi.
+              </p>
+            ) : (
+              availableEditions.map((edition) => {
+                const selected = selectedEditionIds.includes(edition.id);
+                const belongsElsewhere =
+                  edition.organizationPeriodId !== null && edition.organizationPeriodId !== period.id;
+                const reassignmentConfirmed = confirmedReassignmentIds.includes(edition.id);
+
+                return (
+                  <div key={edition.id} className="rounded-lg border border-border p-3">
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={(checked) => toggleEdition(edition.id, checked === true)}
+                        aria-label={`Hubungkan ${edition.name} ${edition.year}`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-foreground">
+                          {edition.name} ({edition.year})
+                        </span>
+                        {belongsElsewhere ? (
+                          <span className="block text-xs text-muted-foreground">
+                            Saat ini: {edition.organizationPeriodLabel ?? "Periode lain"}
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+
+                    {selected && belongsElsewhere ? (
+                      <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-md bg-fb-50 p-2.5">
+                        <Checkbox
+                          checked={reassignmentConfirmed}
+                          onCheckedChange={(checked) =>
+                            setConfirmedReassignmentIds((current) =>
+                              checked === true
+                                ? [...new Set([...current, edition.id])]
+                                : current.filter((id) => id !== edition.id)
+                            )
+                          }
+                          aria-label={`Konfirmasi pemindahan ${edition.name} ${edition.year}`}
+                        />
+                        <span className="text-xs text-fb-900">
+                          Pindahkan dari {edition.organizationPeriodLabel ?? "periode lain"}
+                        </span>
+                      </label>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsEditionDialogOpen(false)}>
+              Batal
+            </Button>
+            <AdminButton
+              type="button"
+              disabled={isPending || !everyConflictConfirmed}
+              onClick={handleSaveEditions}
+            >
+              {isPending ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
+              Simpan
+            </AdminButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ===================================================================== */}
       {/* SHEET: BUAT / EDIT UNIT */}
       {/* ===================================================================== */}
       <Sheet open={isUnitSheetOpen} onOpenChange={setIsUnitSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent side="right" className={cn("w-full sm:max-w-md overflow-y-auto", adminNativeScrollbarClassName)}>
           <SheetHeader className="border-b border-border pb-4">
             <SheetTitle className="font-montserrat text-lg font-bold text-dgb-900">
               {editingUnit ? "Edit Unit Organisasi" : "Tambah Unit Baru"}
@@ -695,20 +894,21 @@ export function PeriodDetailClient({
             <AdminField label="Unit induk (Parent)">
               <AdminSelect
                 value={unitParentId ?? ""}
-                onChange={(e) => setUnitParentId(e.target.value ? e.target.value : null)}
-              >
-                <option value="">Unit Utama (Tingkat 1 - Root)</option>
-                {units
-                  .filter((u) => !editingUnit || u.id !== editingUnit.id)
-                  .map((u) => {
-                    const depth = unitDepthMap.get(u.id) ?? 1;
-                    return (
-                      <option key={u.id} value={u.id} disabled={depth >= 4}>
-                        {"— ".repeat(depth - 1)} {u.name} (Tk. {depth})
-                      </option>
-                    );
-                  })}
-              </AdminSelect>
+                onValueChange={(nextParentId) => setUnitParentId(nextParentId || null)}
+                options={[
+                  { value: "", label: "Unit Utama (Tingkat 1 - Root)" },
+                  ...units
+                    .filter((u) => !editingUnit || u.id !== editingUnit.id)
+                    .map((u) => {
+                      const depth = unitDepthMap.get(u.id) ?? 1;
+                      return {
+                        value: u.id,
+                        label: `Tingkat ${depth}: ${u.name}`,
+                        disabled: disabledParentUnitIds.has(u.id),
+                      };
+                    }),
+                ]}
+              />
             </AdminField>
 
             <div className="grid grid-cols-2 gap-3">
@@ -723,11 +923,12 @@ export function PeriodDetailClient({
               <AdminField label="Status unit">
                 <AdminSelect
                   value={unitActive ? "true" : "false"}
-                  onChange={(e) => setUnitActive(e.target.value === "true")}
-                >
-                  <option value="true">Aktif</option>
-                  <option value="false">Nonaktif</option>
-                </AdminSelect>
+                  onValueChange={(nextValue) => setUnitActive(nextValue === "true")}
+                  options={[
+                    { value: "true", label: "Aktif" },
+                    { value: "false", label: "Nonaktif" },
+                  ]}
+                />
               </AdminField>
             </div>
           </div>
@@ -753,7 +954,7 @@ export function PeriodDetailClient({
       {/* SHEET: PENUGASAN PENGURUS */}
       {/* ===================================================================== */}
       <Sheet open={isMemberSheetOpen} onOpenChange={setIsMemberSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+        <SheetContent side="right" className={cn("w-full sm:max-w-md overflow-y-auto", adminNativeScrollbarClassName)}>
           <SheetHeader className="border-b border-border pb-4">
             <SheetTitle className="font-montserrat text-lg font-bold text-dgb-900">
               {editingMember ? "Edit Penugasan Pengurus" : "Tugaskan Pengurus ke Unit"}
@@ -767,17 +968,12 @@ export function PeriodDetailClient({
             <AdminField label="Unit organisasi tujuan">
               <AdminSelect
                 value={memberTargetUnitId}
-                onChange={(e) => setMemberTargetUnitId(e.target.value)}
-              >
-                {units.map((u) => {
+                onValueChange={setMemberTargetUnitId}
+                options={units.map((u) => {
                   const d = unitDepthMap.get(u.id) ?? 1;
-                  return (
-                    <option key={u.id} value={u.id}>
-                      {"— ".repeat(d - 1)} {u.name}
-                    </option>
-                  );
+                  return { value: u.id, label: `Tingkat ${d}: ${u.name}` };
                 })}
-              </AdminSelect>
+              />
             </AdminField>
 
             <div className="space-y-2">
@@ -790,23 +986,32 @@ export function PeriodDetailClient({
                   placeholder="Cari profil..."
                   value={personSearchQuery}
                   onChange={(e) => setPersonSearchQuery(e.target.value)}
+                  aria-label="Cari profil orang"
                   className="pl-7 h-8 text-xs mb-2"
                 />
               </div>
 
-              <div className="max-h-44 overflow-y-auto rounded-md border border-input p-1 space-y-1 bg-background">
+              <div
+                role="listbox"
+                aria-label="Pilih profil orang"
+                className={cn("max-h-44 overflow-y-auto rounded-md border border-input p-1 space-y-1 bg-background", adminNativeScrollbarClassName)}
+              >
                 {filteredPeopleOptions.length === 0 ? (
                   <p className="p-3 text-center text-xs text-muted-foreground italic">
                     Profil tidak ditemukan. Tambahkan di tab Direktori Profil.
                   </p>
                 ) : (
                   filteredPeopleOptions.map((opt) => (
-                    <button
+                    <Button
                       key={opt.id}
                       type="button"
+                      variant="ghost"
+                      size="default"
                       onClick={() => setMemberPersonId(opt.id)}
+                      role="option"
+                      aria-selected={memberPersonId === opt.id}
                       className={cn(
-                        "flex w-full items-center gap-2.5 rounded-md p-2 text-left text-xs transition-colors",
+                        "flex h-auto w-full items-center gap-2.5 rounded-md p-2 text-left text-xs whitespace-normal transition-colors",
                         memberPersonId === opt.id
                           ? "bg-dgb text-white font-semibold"
                           : "hover:bg-muted text-foreground"
@@ -822,7 +1027,7 @@ export function PeriodDetailClient({
                         )}
                       </div>
                       <span className="truncate">{opt.name}</span>
-                    </button>
+                    </Button>
                   ))
                 )}
               </div>
@@ -848,11 +1053,12 @@ export function PeriodDetailClient({
               <AdminField label="Status keaktifan">
                 <AdminSelect
                   value={memberActive ? "true" : "false"}
-                  onChange={(e) => setMemberActive(e.target.value === "true")}
-                >
-                  <option value="true">Aktif</option>
-                  <option value="false">Nonaktif</option>
-                </AdminSelect>
+                  onValueChange={(nextValue) => setMemberActive(nextValue === "true")}
+                  options={[
+                    { value: "true", label: "Aktif" },
+                    { value: "false", label: "Nonaktif" },
+                  ]}
+                />
               </AdminField>
             </div>
           </div>
@@ -878,7 +1084,7 @@ export function PeriodDetailClient({
       {/* DIALOG: EDIT METADATA PERIODE */}
       {/* ===================================================================== */}
       <Dialog open={isEditPeriodOpen} onOpenChange={setIsEditPeriodOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className={cn("sm:max-w-lg max-h-[85vh] overflow-y-auto", adminNativeScrollbarClassName)}>
           <DialogHeader>
             <DialogTitle className="font-montserrat text-base font-bold text-dgb-900">
               Edit Metadata Periode
@@ -913,12 +1119,13 @@ export function PeriodDetailClient({
             <AdminField label="Status siklus">
               <AdminSelect
                 value={editLifecycle}
-                onChange={(e) => setEditLifecycle(e.target.value as PeriodLifecycle)}
-              >
-                <option value="draft">Draft (Konseptual)</option>
-                <option value="active">Active (Sedang Berjalan)</option>
-                <option value="archived">Archived (Arsip)</option>
-              </AdminSelect>
+                onValueChange={(nextLifecycle) => setEditLifecycle(nextLifecycle as PeriodLifecycle)}
+                options={[
+                  { value: "draft", label: "Draft (Konseptual)" },
+                  { value: "active", label: "Active (Sedang Berjalan)" },
+                  { value: "archived", label: "Archived (Arsip)" },
+                ]}
+              />
             </AdminField>
 
             <AdminField label="Visi organisasi">
@@ -932,13 +1139,15 @@ export function PeriodDetailClient({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">Misi Organisasi</span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setEditMissions([...editMissions, ""])}
-                  className="text-xs font-semibold text-dgb hover:underline inline-flex items-center gap-1"
+                  className="h-auto rounded-none px-0 py-0 text-xs font-semibold text-dgb hover:underline"
                 >
                   <Plus size={12} /> Tambah misi
-                </button>
+                </Button>
               </div>
               <div className="space-y-2">
                 {editMissions.map((m, idx) => (
@@ -955,14 +1164,41 @@ export function PeriodDetailClient({
                       }}
                       className="text-xs"
                     />
-                    {editMissions.length > 1 ? (
-                      <button
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={idx === 0}
+                        onClick={() => moveMission(idx, "up")}
+                        aria-label={`Pindahkan misi ${idx + 1} ke atas`}
+                        className="size-7"
+                      >
+                        <ArrowUp className="size-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={idx === editMissions.length - 1}
+                        onClick={() => moveMission(idx, "down")}
+                        aria-label={`Pindahkan misi ${idx + 1} ke bawah`}
+                        className="size-7"
+                      >
+                        <ArrowDown className="size-3" />
+                      </Button>
+                    </div>
+                    {editMissions.length > 1 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setEditMissions(editMissions.filter((_, i) => i !== idx))}
-                        className="p-1 text-muted-foreground hover:text-rose-600"
+                        aria-label={`Hapus misi ${idx + 1}`}
+                        className="size-7 rounded-md p-0 text-muted-foreground hover:text-rose-600"
                       >
                         <Trash2 size={13} />
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                 ))}
@@ -1054,6 +1290,8 @@ function UnitTreeRow({
   onEditMember,
   onDeleteMember,
   canEdit,
+  canMoveUp,
+  canMoveDown,
 }: {
   node: TreeNode;
   onAddSubunit: (unit: DetailUnit) => void;
@@ -1064,6 +1302,8 @@ function UnitTreeRow({
   onEditMember: (member: DetailMember) => void;
   onDeleteMember: (member: DetailMember) => void;
   canEdit: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -1081,13 +1321,17 @@ function UnitTreeRow({
       >
         <div className="flex items-center gap-2.5">
           {node.children.length > 0 || node.members.length > 0 ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-expanded={isExpanded}
+              aria-label={`${isExpanded ? "Tutup" : "Buka"} ${node.name}`}
+              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
+            </Button>
           ) : (
             <span className="size-5" />
           )}
@@ -1115,22 +1359,30 @@ function UnitTreeRow({
 
         {canEdit ? (
           <div className="flex items-center gap-1">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => onMoveUnit(node, "up")}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              disabled={!canMoveUp}
+              aria-label={`Pindahkan ${node.name} ke atas`}
+              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Pindahkan ke atas"
             >
               <ArrowUp size={13} />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => onMoveUnit(node, "down")}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              disabled={!canMoveDown}
+              aria-label={`Pindahkan ${node.name} ke bawah`}
+              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Pindahkan ke bawah"
             >
               <ArrowDown size={13} />
-            </button>
+            </Button>
 
             {node.depth < 4 ? (
               <Button
@@ -1138,6 +1390,7 @@ function UnitTreeRow({
                 variant="outline"
                 size="sm"
                 onClick={() => onAddSubunit(node)}
+                aria-label={`Tambah sub-unit pada ${node.name}`}
                 className="h-7 px-2 text-xs border-dgb-200 text-dgb hover:bg-dgb-50"
               >
                 <Plus size={12} className="mr-1" /> Sub-unit
@@ -1148,27 +1401,34 @@ function UnitTreeRow({
               type="button"
               size="sm"
               onClick={() => onAssignMember(node.id)}
+              aria-label={`Tambah pengurus pada ${node.name}`}
               className="h-7 bg-dgb px-2.5 text-xs text-white hover:bg-dgb-600"
             >
               <UserPlus size={12} className="mr-1" /> Tambah pengurus
             </Button>
 
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => onEditUnit(node)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label={`Edit ${node.name}`}
+              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
               title="Edit nama unit"
             >
               <Edit2 size={13} />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => onDeleteUnit(node)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
+              aria-label={`Hapus ${node.name}`}
+              className="size-7 rounded-md p-0 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
               title="Hapus unit"
             >
               <Trash2 size={13} />
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
@@ -1215,22 +1475,28 @@ function UnitTreeRow({
 
                   {canEdit ? (
                     <div className="flex items-center gap-1 shrink-0 ml-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => onEditMember(member)}
-                        className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label={`Edit jabatan ${member.personName}`}
+                        className="size-6 rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
                         title="Edit jabatan"
                       >
                         <Edit2 size={12} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => onDeleteMember(member)}
-                        className="rounded-md p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
+                        aria-label={`Cabut penugasan ${member.personName}`}
+                        className="size-6 rounded-md p-0 text-muted-foreground hover:bg-rose-50 hover:text-rose-700"
                         title="Cabut penugasan"
                       >
                         <Trash2 size={12} />
-                      </button>
+                      </Button>
                     </div>
                   ) : null}
                 </div>
@@ -1248,7 +1514,7 @@ function UnitTreeRow({
           {/* Subunits recursive render */}
           {node.children.length > 0 ? (
             <div className="space-y-2 p-2 bg-muted/5">
-              {node.children.map((child) => (
+              {node.children.map((child, index) => (
                 <UnitTreeRow
                   key={child.id}
                   node={child}
@@ -1260,6 +1526,8 @@ function UnitTreeRow({
                   onEditMember={onEditMember}
                   onDeleteMember={onDeleteMember}
                   canEdit={canEdit}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < node.children.length - 1}
                 />
               ))}
             </div>

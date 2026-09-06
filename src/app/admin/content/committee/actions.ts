@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { appendAuditLog } from "@/server/auth/audit";
@@ -25,16 +25,60 @@ function slugify(text: string): string {
   return cleaned || "profil";
 }
 
+function parseNonNegativeInteger(value: FormDataEntryValue | null | undefined, label: string, fallback = 0) {
+  const raw = value === null || value === undefined || value === "" ? fallback : Number(value);
+  if (!Number.isInteger(raw) || raw < 0) {
+    throw new Error(`${label} harus berupa bilangan bulat nol atau lebih`);
+  }
+  return raw;
+}
+
+function parseVersion(value: FormDataEntryValue | null | undefined, label: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${label} tidak valid`);
+  }
+  return parsed;
+}
+
 // ---------------------------------------------------------------------------
 // Unit Tree Helper / Validation
 // ---------------------------------------------------------------------------
+
+function validateCommitteeTree(units: Pick<CommitteeUnitRow, "id" | "parentId">[]) {
+  const unitMap = new Map(units.map((unit) => [unit.id, unit]));
+  const states = new Map<string, "visiting" | "visited">();
+  const depths = new Map<string, number>();
+
+  const visit = (id: string): number => {
+    if (states.get(id) === "visiting") {
+      throw new Error("Terdeteksi struktur melingkar pada hierarki unit");
+    }
+    if (states.get(id) === "visited") return depths.get(id) ?? 1;
+
+    const unit = unitMap.get(id);
+    if (!unit) throw new Error("Unit panitia tidak ditemukan pada edisi ini");
+    states.set(id, "visiting");
+    const depth = unit.parentId ? visit(unit.parentId) + 1 : 1;
+    if (depth > 4) {
+      throw new Error(`Struktur panitia maksimal 4 tingkat kedalaman (tingkat saat ini: ${depth})`);
+    }
+    depths.set(id, depth);
+    states.set(id, "visited");
+    return depth;
+  };
+
+  for (const unit of units) visit(unit.id);
+  return depths;
+}
 
 function checkCommitteeTreeCycleAndDepth(
   units: CommitteeUnitRow[],
   targetUnitId: string | null,
   newParentId: string | null
 ) {
-  if (!newParentId) return; // Root unit (depth 1) is always valid
+  const depthMap = validateCommitteeTree(units);
+  if (!newParentId) return;
 
   if (targetUnitId && newParentId === targetUnitId) {
     throw new Error("Unit tidak dapat menjadi induk bagi dirinya sendiri");
@@ -59,7 +103,7 @@ function checkCommitteeTreeCycleAndDepth(
 
   // Check cycle by walking up ancestors of newParentId
   let ancestorWalk: CommitteeUnitRow | undefined = parent;
-  let parentDepth = 1;
+  const parentDepth = depthMap.get(parent.id) ?? 1;
   const visited = new Set<string>([parent.id]);
 
   while (ancestorWalk?.parentId) {
@@ -70,7 +114,6 @@ function checkCommitteeTreeCycleAndDepth(
       throw new Error("Terdeteksi struktur melingkar pada hierarki unit");
     }
     visited.add(ancestorWalk.parentId);
-    parentDepth++;
     ancestorWalk = unitMap.get(ancestorWalk.parentId);
   }
 
@@ -116,9 +159,7 @@ export async function createCommitteeUnitAction(formData: FormData) {
     throw new Error("Nama unit panitia wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan unit");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   const id = crypto.randomUUID();
@@ -195,9 +236,7 @@ export async function updateCommitteeUnitAction(formData: FormData) {
     throw new Error("Nama unit panitia wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan unit");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   await database.transaction(async (tx) => {
@@ -286,7 +325,9 @@ export async function deleteCommitteeUnitAction(formData: FormData) {
       throw new Error("Unit panitia tidak ditemukan pada edisi terpilih");
     }
 
-    await tx.delete(committeeUnits).where(eq(committeeUnits.id, id));
+    await tx
+      .delete(committeeUnits)
+      .where(and(eq(committeeUnits.id, id), eq(committeeUnits.editionId, edition.id)));
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -314,28 +355,50 @@ export async function reorderCommitteeUnitsAction(items: { id: string; displayOr
   }
 
   if (!Array.isArray(items) || items.length === 0) {
-    return { success: true };
+    throw new Error("Daftar unit untuk pengurutan wajib disertakan");
+  }
+
+  const normalizedItems = items.map((item) => {
+    if (!item || typeof item.id !== "string" || !item.id.trim()) {
+      throw new Error("ID unit tidak valid");
+    }
+    if (!Number.isInteger(item.displayOrder) || item.displayOrder < 0) {
+      throw new Error("Urutan unit harus berupa bilangan bulat nol atau lebih");
+    }
+    return { id: item.id.trim(), displayOrder: item.displayOrder };
+  });
+  const ids = normalizedItems.map((item) => item.id);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Unit yang sama tidak boleh diurutkan lebih dari sekali");
   }
 
   await database.transaction(async (tx) => {
-    const ids = items.map((i) => i.id);
     const existing = await tx
       .select()
       .from(committeeUnits)
       .where(and(inArray(committeeUnits.id, ids), eq(committeeUnits.editionId, edition.id)));
 
-    const existingMap = new Map(existing.map((u) => [u.id, u]));
+    if (existing.length !== normalizedItems.length) {
+      throw new Error("Satu atau beberapa unit tidak ditemukan pada edisi terpilih");
+    }
+    if (new Set(existing.map((unit) => unit.parentId)).size !== 1) {
+      throw new Error("Unit yang diurutkan harus berada pada induk yang sama");
+    }
 
-    for (const item of items) {
-      if (existingMap.has(item.id)) {
-        await tx
-          .update(committeeUnits)
-          .set({
-            displayOrder: item.displayOrder,
-            updatedAt: new Date(),
-          })
-          .where(eq(committeeUnits.id, item.id));
-      }
+    const allEditionUnits = await tx
+      .select()
+      .from(committeeUnits)
+      .where(eq(committeeUnits.editionId, edition.id));
+    validateCommitteeTree(allEditionUnits);
+
+    for (const item of normalizedItems) {
+      await tx
+        .update(committeeUnits)
+        .set({
+          displayOrder: item.displayOrder,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(committeeUnits.id, item.id), eq(committeeUnits.editionId, edition.id)));
     }
 
     await appendAuditLog(tx, {
@@ -345,7 +408,7 @@ export async function reorderCommitteeUnitsAction(items: { id: string; displayOr
       resourceType: "committee_unit",
       resourceId: edition.id,
       resourceLabel: `Reorder unit panitia ${edition.name}`,
-      after: { items },
+      after: { items: normalizedItems },
       changedFields: ["displayOrder"],
       source: "admin-committee",
     });
@@ -376,9 +439,7 @@ export async function assignCommitteeMemberAction(formData: FormData) {
     throw new Error("Unit panitia, profil orang, dan jabatan wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan penugasan");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   const id = crypto.randomUUID();
@@ -405,6 +466,22 @@ export async function assignCommitteeMemberAction(formData: FormData) {
 
     if (!person) {
       throw new Error("Profil orang tidak ditemukan");
+    }
+
+    const [duplicate] = await tx
+      .select({ id: committeeAssignments.id })
+      .from(committeeAssignments)
+      .where(
+        and(
+          eq(committeeAssignments.editionId, edition.id),
+          eq(committeeAssignments.unitId, unitId),
+          eq(committeeAssignments.personId, personId),
+          eq(committeeAssignments.title, title)
+        )
+      )
+      .limit(1);
+    if (duplicate) {
+      throw new Error("Penugasan dengan profil dan jabatan yang sama sudah ada pada unit ini");
     }
 
     await tx.insert(committeeAssignments).values({
@@ -460,15 +537,13 @@ export async function updateCommitteeAssignmentAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   const displayOrderRaw = formData.get("displayOrder");
   const activeRaw = formData.get("active");
-  const version = Number(formData.get("version") ?? 1);
+  const version = parseVersion(formData.get("version"), "Versi penugasan");
 
   if (!id || !title) {
     throw new Error("ID penugasan dan jabatan wajib diisi");
   }
 
-  const displayOrder = Number.isInteger(Number(displayOrderRaw))
-    ? Math.max(0, Number(displayOrderRaw))
-    : 0;
+  const displayOrder = parseNonNegativeInteger(displayOrderRaw, "Urutan penugasan");
   const active = activeRaw === "false" || activeRaw === "0" ? false : true;
 
   await database.transaction(async (tx) => {
@@ -510,6 +585,23 @@ export async function updateCommitteeAssignmentAction(formData: FormData) {
       throw new Error("Profil orang tidak ditemukan");
     }
 
+    const [duplicate] = await tx
+      .select({ id: committeeAssignments.id })
+      .from(committeeAssignments)
+      .where(
+        and(
+          eq(committeeAssignments.editionId, edition.id),
+          eq(committeeAssignments.unitId, targetUnitId),
+          eq(committeeAssignments.personId, targetPersonId),
+          eq(committeeAssignments.title, title),
+          ne(committeeAssignments.id, id)
+        )
+      )
+      .limit(1);
+    if (duplicate) {
+      throw new Error("Penugasan dengan profil dan jabatan yang sama sudah ada pada unit ini");
+    }
+
     const nextVersion = current.version + 1;
 
     await tx
@@ -523,7 +615,7 @@ export async function updateCommitteeAssignmentAction(formData: FormData) {
         version: nextVersion,
         updatedAt: new Date(),
       })
-      .where(eq(committeeAssignments.id, id));
+      .where(and(eq(committeeAssignments.id, id), eq(committeeAssignments.editionId, edition.id)));
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -565,6 +657,7 @@ export async function removeCommitteeAssignmentAction(formData: FormData) {
   }
 
   const id = String(formData.get("id") ?? "").trim();
+  const version = parseVersion(formData.get("version"), "Versi penugasan");
   if (!id) {
     throw new Error("ID penugasan panitia wajib disertakan");
   }
@@ -579,8 +672,13 @@ export async function removeCommitteeAssignmentAction(formData: FormData) {
     if (!current) {
       throw new Error("Penugasan panitia tidak ditemukan pada edisi terpilih");
     }
+    if (current.version !== version) {
+      throw new Error("Versi data telah diperbarui oleh pengguna lain. Silakan muat ulang halaman.");
+    }
 
-    await tx.delete(committeeAssignments).where(eq(committeeAssignments.id, id));
+    await tx
+      .delete(committeeAssignments)
+      .where(and(eq(committeeAssignments.id, id), eq(committeeAssignments.editionId, edition.id)));
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -619,24 +717,24 @@ export async function createQuickPersonAction(formData: FormData) {
   const portraitMediaId = portraitMediaIdRaw && portraitMediaIdRaw.length > 0 ? portraitMediaIdRaw : null;
 
   let portraitUrl: string | null = null;
-  if (portraitMediaId) {
-    const [asset] = await database
-      .select()
-      .from(mediaAssets)
-      .where(eq(mediaAssets.id, portraitMediaId))
-      .limit(1);
-
-    if (!asset || asset.lifecycle !== "ready" || !asset.mimeType.startsWith("image/")) {
-      throw new Error("Foto profil harus berupa gambar yang valid dan siap digunakan");
-    }
-    portraitUrl = asset.url;
-  }
-
+  let finalSlug = baseSlug;
   const personId = crypto.randomUUID();
   const now = new Date();
 
   await database.transaction(async (tx) => {
-    let finalSlug = baseSlug;
+    if (portraitMediaId) {
+      const [asset] = await tx
+        .select()
+        .from(mediaAssets)
+        .where(eq(mediaAssets.id, portraitMediaId))
+        .limit(1);
+
+      if (!asset || asset.lifecycle !== "ready" || !asset.mimeType.startsWith("image/")) {
+        throw new Error("Foto profil harus berupa gambar yang valid dan siap digunakan");
+      }
+      portraitUrl = asset.url;
+    }
+
     const existingSlug = await tx
       .select({ id: people.id, slug: people.slug })
       .from(people)
@@ -685,7 +783,7 @@ export async function createQuickPersonAction(formData: FormData) {
     person: {
       id: personId,
       name,
-      slug: baseSlug,
+      slug: finalSlug,
       shortBio,
       portraitMediaId,
       portraitUrl,

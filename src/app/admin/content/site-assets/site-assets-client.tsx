@@ -1,13 +1,11 @@
 "use client";
 
-import {
-  Trash2,
-} from "lucide-react";
-import { useState, useTransition } from "react";
+import { CheckCircle2, CircleAlert, Image as ImageIcon, Trash2, Video } from "lucide-react";
+import Image from "next/image";
+import { useState, useTransition, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import {
-  AdminBadge,
   AdminButton,
   AdminCard,
   AdminField,
@@ -24,11 +22,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   SITE_ASSET_GROUPS,
-  type SiteAssetGroup,
   type SiteAssetSlotDefinition,
 } from "@/server/cms/site-asset-manifest";
 import type { SiteAssetBindingRow } from "@/server/db/schema";
@@ -51,106 +54,145 @@ export type SiteAssetsClientProps = {
   canManageContent?: boolean;
 };
 
+function StatusTag({ ready, label }: { ready: boolean; label?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold",
+        ready
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-amber-200 bg-amber-50 text-amber-800",
+      )}
+    >
+      {ready ? <CheckCircle2 className="size-3.5" /> : <CircleAlert className="size-3.5" />}
+      {label ?? (ready ? "Siap" : "Kosong")}
+    </span>
+  );
+}
+
+function mediaTypeLabel(acceptType: SiteAssetSlotDefinition["acceptType"]) {
+  return acceptType === "video" ? "Video" : "Gambar";
+}
+
+function SlotPreview({
+  definition,
+  asset,
+  focalX,
+  focalY,
+}: {
+  definition: SiteAssetSlotDefinition;
+  asset: MediaAssetSummary | null;
+  focalX: number;
+  focalY: number;
+}) {
+  const isImage = Boolean(asset?.mimeType.startsWith("image/"));
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-lg border border-border bg-muted/30"
+      style={{ aspectRatio: definition.aspectRatio.replace(":", " /") }}
+      aria-label={`Pratinjau ${definition.label}`}
+    >
+      {isImage && asset ? (
+        <Image
+          src={asset.url}
+          alt={asset.alt ?? definition.label}
+          fill
+          sizes="(max-width: 640px) 100vw, 45vw"
+          className="object-cover"
+          style={{ objectPosition: `${focalX}% ${focalY}%` }}
+        />
+      ) : asset ? (
+        <div className="flex h-full flex-col items-center justify-center gap-2 bg-fb-50 px-4 text-center text-fb-800">
+          <Video className="size-7" />
+          <span className="max-w-full truncate text-xs font-semibold">{asset.filename}</span>
+        </div>
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground">
+          {definition.acceptType === "video" ? <Video className="size-7" /> : <ImageIcon className="size-7" />}
+          <span className="text-xs">Belum ada media</span>
+          <span className="text-[11px]">Rasio {definition.aspectRatio}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SiteAssetsClient({
   edition,
   slotsData,
   canManageContent = true,
 }: SiteAssetsClientProps) {
-  const [activeGroup, setActiveGroup] = useState<SiteAssetGroup>("home");
-
   const totalSlots = slotsData.length;
-  const filledSlots = slotsData.filter((s) => Boolean(s.binding?.mediaId && s.mediaAsset)).length;
+  const filledSlots = slotsData.filter((slot) => Boolean(slot.binding?.mediaId && slot.mediaAsset)).length;
   const requiredSlots = slotsData.filter((s) => s.definition.required);
-  const requiredFilled = requiredSlots.filter((s) => Boolean(s.binding?.mediaId && s.mediaAsset)).length;
-
-  const currentGroupSlots = slotsData.filter((s) => s.definition.group === activeGroup);
+  const requiredFilled = requiredSlots.filter((slot) => Boolean(slot.binding?.mediaId && slot.mediaAsset)).length;
 
   return (
-    <div className="space-y-6">
-      {/* Overview Stat Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Slot Aset</p>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-montserrat text-2xl font-bold text-foreground">{totalSlots}</span>
-            <span className="text-xs text-muted-foreground">Terdaftar di sistem</span>
+    <div className="space-y-7">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <AdminCard padding="none" className="overflow-hidden">
+          <div className="border-l-2 border-dgb px-4 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Slot manifest</p>
+            <p className="mt-1 font-montserrat text-2xl font-semibold text-dgb-900">{totalSlots}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Slot tetap yang tersedia</p>
           </div>
-        </div>
+        </AdminCard>
 
-        <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-dgb-800">Aset Terpasang</p>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-montserrat text-2xl font-bold text-dgb">{filledSlots}</span>
-            <span className="text-xs text-muted-foreground">dari {totalSlots} slot</span>
+        <AdminCard padding="none" className="overflow-hidden">
+          <div className="border-l-2 border-dgb px-4 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Terpasang</p>
+            <p className="mt-1 font-montserrat text-2xl font-semibold text-dgb-900">{filledSlots}/{totalSlots}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Media siap pada slot</p>
           </div>
-        </div>
+        </AdminCard>
 
-        <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-fb-800">Slot Wajib Terisi</p>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-montserrat text-2xl font-bold text-fb">
-              {requiredFilled}/{requiredSlots.length}
-            </span>
-            <AdminBadge
-              value={requiredFilled === requiredSlots.length ? "ready" : "draft"}
-              className={requiredFilled === requiredSlots.length ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}
-            />
+        <AdminCard padding="none" className="overflow-hidden">
+          <div className="border-l-2 border-fb px-4 py-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Slot wajib</p>
+                <p className="mt-1 font-montserrat text-2xl font-semibold text-dgb-900">{requiredFilled}/{requiredSlots.length}</p>
+              </div>
+              <StatusTag ready={requiredFilled === requiredSlots.length} label={requiredFilled === requiredSlots.length ? "Lengkap" : "Perlu diisi"} />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Kebutuhan minimum publikasi</p>
           </div>
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Halaman Terkait</p>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="font-montserrat text-2xl font-bold text-foreground">3 Halaman</span>
-            <span className="text-xs text-muted-foreground">Beranda, Tentang, Kategori</span>
-          </div>
-        </div>
+        </AdminCard>
       </div>
 
-      {/* Tabs for Navigation */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-        {SITE_ASSET_GROUPS.map((grp) => {
-          const groupSlots = slotsData.filter((s) => s.definition.group === grp.key);
-          const groupFilled = groupSlots.filter((s) => Boolean(s.binding?.mediaId && s.mediaAsset)).length;
-          const isActive = activeGroup === grp.key;
+      <Accordion type="single" collapsible className="space-y-3">
+        {SITE_ASSET_GROUPS.map((group) => {
+          const groupSlots = slotsData.filter((slot) => slot.definition.group === group.key);
+          const groupFilled = groupSlots.filter((slot) => Boolean(slot.binding?.mediaId && slot.mediaAsset)).length;
 
           return (
-            <button
-              key={grp.key}
-              type="button"
-              onClick={() => setActiveGroup(grp.key)}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-4 py-2.5 text-xs font-semibold transition-all",
-                isActive
-                  ? "bg-dgb text-white shadow-xs"
-                  : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <span>{grp.label}</span>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px]",
-                  isActive ? "bg-white/20 text-white" : "bg-background text-foreground border border-border"
-                )}
-              >
-                {groupFilled}/{groupSlots.length}
-              </span>
-            </button>
+            <AccordionItem key={group.key} value={group.key} className="overflow-hidden rounded-xl border border-border bg-card px-4 sm:px-5">
+              <AccordionTrigger className="hover:no-underline">
+                <div className="min-w-0 text-left">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-montserrat text-base font-semibold text-dgb-900">{group.label}</span>
+                    <StatusTag ready={groupFilled === groupSlots.length} label={`${groupFilled}/${groupSlots.length}`} />
+                  </div>
+                  <p className="mt-1 line-clamp-1 text-xs font-normal text-muted-foreground">{group.description}</p>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="border-t border-border/70 pt-4">
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {groupSlots.map((item) => (
+                    <SiteAssetSlotCard
+                      key={`${edition.id}-${item.definition.slotKey}`}
+                      item={item}
+                      editionId={edition.id}
+                      canManageContent={canManageContent}
+                    />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           );
         })}
-      </div>
-
-      {/* Slots Grid */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {currentGroupSlots.map((item) => (
-          <SiteAssetSlotCard
-            key={item.definition.slotKey}
-            item={item}
-            editionId={edition.id}
-            canManageContent={canManageContent}
-          />
-        ))}
-      </div>
+      </Accordion>
     </div>
   );
 }
@@ -169,12 +211,12 @@ function SiteAssetSlotCard({
   const [altOverride, setAltOverride] = useState(item.binding?.altOverride ?? "");
   const [focalX, setFocalX] = useState<number>(item.binding?.focalX ?? 50);
   const [focalY, setFocalY] = useState<number>(item.binding?.focalY ?? 50);
+  const [isBound, setIsBound] = useState(Boolean(item.binding?.mediaId && item.mediaAsset));
   const [isConfirmUnbindOpen, setIsConfirmUnbindOpen] = useState(false);
 
-  const { definition, binding } = item;
-  const isBound = Boolean(binding?.mediaId && item.mediaAsset);
+  const { definition } = item;
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canManageContent) return;
 
@@ -193,7 +235,8 @@ function SiteAssetSlotCard({
     startTransition(async () => {
       try {
         await bindSiteAssetAction(formData);
-        toast.success(`Slot ${definition.label} berhasil disimpan`);
+        setIsBound(true);
+        toast.success(`${definition.label} disimpan`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gagal menyimpan aset");
       }
@@ -211,153 +254,128 @@ function SiteAssetSlotCard({
         await unbindSiteAssetAction(formData);
         setSelectedAsset(null);
         setAltOverride("");
+        setIsBound(false);
         setIsConfirmUnbindOpen(false);
-        toast.success(`Media pada slot ${definition.label} berhasil dilepas`);
+        toast.success(`${definition.label} dilepas`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Gagal melepas media");
       }
     });
   };
 
+  const formId = `form-${definition.slotKey}`;
+
   return (
-    <AdminCard className="flex flex-col justify-between overflow-hidden">
-      <div>
-        {/* Header with Slot Identity */}
-        <div className="border-b border-border bg-muted/20 p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-sm border border-border bg-background px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  {definition.pageLabel} ({definition.pageRoute})
+    <AdminCard padding="none" className="overflow-hidden">
+      <div className="border-b border-border/70 bg-muted/15 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="rounded-md border border-dgb-100 bg-dgb-50/60 px-2 py-1 text-[10px] font-semibold text-dgb-800">
+                {mediaTypeLabel(definition.acceptType)}
+              </span>
+              <span className="rounded-md border border-border bg-muted px-2 py-1 text-[10px] text-muted-foreground">
+                Rasio {definition.aspectRatio}
+              </span>
+              {definition.required ? (
+                <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">
+                  Wajib
                 </span>
-                <span className="rounded-sm border border-dgb-100 bg-dgb-50/60 px-1.5 py-0.5 text-[10px] font-bold uppercase text-dgb-800">
-                  {definition.acceptType}
-                </span>
-                <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  Rasio {definition.aspectRatio}
-                </span>
-                {definition.required ? (
-                  <span className="rounded-sm border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                    Wajib
-                  </span>
-                ) : null}
-              </div>
-              <h4 className="font-montserrat text-sm font-semibold text-dgb-900">
-                {definition.label}
-              </h4>
-            </div>
-
-            <AdminBadge
-              value={isBound ? "active" : "draft"}
-              className={isBound ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}
-            />
-          </div>
-
-          <p className="mt-2 text-xs text-muted-foreground">{definition.description}</p>
-          <p className="mt-1 text-[11px] font-mono text-muted-foreground/80">Kunci: {definition.slotKey}</p>
-        </div>
-
-        {/* Media Selector & Configuration Body */}
-        <form id={`form-${definition.slotKey}`} onSubmit={handleSave} className="space-y-4 p-4">
-          <AdminMediaField
-            name={`media-${definition.slotKey}`}
-            label="Media terpilih"
-            hint={`Format ${definition.acceptType === "video" ? "video MP4/WebM" : "gambar JPEG/PNG/WebP/AVIF"}.`}
-            aspectRatioHint={definition.aspectRatio}
-            acceptType={definition.acceptType}
-            initialAsset={selectedAsset}
-            onChange={setSelectedAsset}
-            canManageMedia={canManageContent}
-            activeEditionId={editionId}
-          />
-
-          {selectedAsset ? (
-            <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
-              <AdminField
-                label="Alt text khusus slot (opsional)"
-                hint="Ganti deskripsi aksesibilitas khusus untuk penempatan pada slot ini."
-              >
-                <AdminInput
-                  value={altOverride}
-                  onChange={(e) => setAltOverride(e.target.value)}
-                  placeholder={selectedAsset.alt ?? "Masukkan teks alternatif..."}
-                  disabled={!canManageContent || isPending}
-                />
-              </AdminField>
-
-              {definition.acceptType === "image" ? (
-                <div className="grid grid-cols-2 gap-3 pt-1">
-                  <AdminField label="Fokus X (%)" hint="Titik fokus horizontal (0 - 100).">
-                    <AdminInput
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={focalX}
-                      onChange={(e) => setFocalX(Number(e.target.value))}
-                      disabled={!canManageContent || isPending}
-                    />
-                  </AdminField>
-                  <AdminField label="Fokus Y (%)" hint="Titik fokus vertikal (0 - 100).">
-                    <AdminInput
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={focalY}
-                      onChange={(e) => setFocalY(Number(e.target.value))}
-                      disabled={!canManageContent || isPending}
-                    />
-                  </AdminField>
-                </div>
               ) : null}
             </div>
-          ) : null}
-        </form>
+            <h3 className="font-montserrat text-sm font-semibold text-dgb-900">{definition.label}</h3>
+            <p className="text-xs leading-5 text-muted-foreground">{definition.description}</p>
+          </div>
+          <StatusTag ready={isBound} label={isBound ? "Terpasang" : "Kosong"} />
+        </div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="flex items-center justify-between border-t border-border bg-muted/10 p-3">
-        <div>
-          {isBound && canManageContent ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isPending}
-              onClick={() => setIsConfirmUnbindOpen(true)}
-              className="h-8 text-xs border-rose-200 text-destructive hover:bg-rose-50"
-            >
-              <Trash2 size={13} className="mr-1" /> Lepas slot
-            </Button>
-          ) : null}
-        </div>
+      <form id={formId} onSubmit={handleSave} className="space-y-4 p-4 sm:p-5">
+        <SlotPreview definition={definition} asset={selectedAsset} focalX={focalX} focalY={focalY} />
 
-        <AdminButton
-          type="submit"
-          form={`form-${definition.slotKey}`}
-          disabled={!canManageContent || !selectedAsset || isPending}
-          className="bg-dgb text-white text-xs h-8 hover:bg-dgb-600"
-        >
-          {isPending ? "Menyimpan..." : isBound ? "Perbarui slot" : "Pasang ke slot"}
+        <AdminMediaField
+          name={`media-${definition.slotKey}`}
+          label="Media"
+          hint={`Format ${mediaTypeLabel(definition.acceptType).toLowerCase()} yang sesuai rasio slot.`}
+          aspectRatioHint={definition.aspectRatio}
+          acceptType={definition.acceptType}
+          initialAsset={selectedAsset}
+          onChange={setSelectedAsset}
+          canManageMedia={canManageContent}
+          activeEditionId={editionId}
+        />
+
+        {selectedAsset ? (
+          <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+            <AdminField label="Alt khusus slot" hint="Kosongkan untuk memakai alt media.">
+              <AdminInput
+                value={altOverride}
+                onChange={(e) => setAltOverride(e.target.value)}
+                placeholder={selectedAsset.alt ?? "Tulis teks alternatif"}
+                maxLength={200}
+                disabled={!canManageContent || isPending}
+              />
+            </AdminField>
+
+            {definition.acceptType === "image" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <AdminField label="Fokus X (%)" hint="0 sampai 100.">
+                  <AdminInput
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={focalX}
+                    onChange={(e) => setFocalX(Number(e.target.value))}
+                    disabled={!canManageContent || isPending}
+                  />
+                </AdminField>
+                <AdminField label="Fokus Y (%)" hint="0 sampai 100.">
+                  <AdminInput
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={focalY}
+                    onChange={(e) => setFocalY(Number(e.target.value))}
+                    disabled={!canManageContent || isPending}
+                  />
+                </AdminField>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </form>
+
+      <div className="flex flex-col-reverse gap-2 border-t border-border/70 bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+        {isBound && canManageContent ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isPending}
+            onClick={() => setIsConfirmUnbindOpen(true)}
+            className="border-rose-200 text-xs text-destructive hover:bg-rose-50"
+          >
+            <Trash2 className="size-3.5" />
+            Lepas media
+          </Button>
+        ) : <span aria-hidden="true" />}
+
+        <AdminButton type="submit" form={formId} disabled={!canManageContent || !selectedAsset || isPending}>
+          {isPending ? "Menyimpan..." : isBound ? "Simpan perubahan" : "Pasang media"}
         </AdminButton>
       </div>
 
-      {/* Confirm Unbind Dialog */}
       <AlertDialog open={isConfirmUnbindOpen} onOpenChange={setIsConfirmUnbindOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-montserrat">
-              Lepas media dari slot ini?
-            </AlertDialogTitle>
+            <AlertDialogTitle className="font-montserrat">Lepas media dari slot?</AlertDialogTitle>
             <AlertDialogDescription>
-              Media tidak akan terhapus dari pustaka, tetapi slot &quot;{definition.label}&quot; akan menjadi kosong pada edisi ini.
+              Media tetap tersimpan di pustaka. Slot &quot;{definition.label}&quot; akan menjadi kosong.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleUnbind}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
+            <AlertDialogCancel disabled={isPending}>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnbind} disabled={isPending} className="bg-destructive text-white hover:bg-destructive/90">
               Lepas media
             </AlertDialogAction>
           </AlertDialogFooter>

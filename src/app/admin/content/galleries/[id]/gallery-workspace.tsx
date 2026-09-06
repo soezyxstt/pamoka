@@ -6,17 +6,15 @@ import {
   ArrowUp,
   Eye,
   FileEdit,
-  Globe,
   ImageIcon,
   LayoutGrid,
-  Plus,
   Save,
   Trash2,
   Video,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -29,7 +27,9 @@ import {
   AdminCard,
   AdminCardHeader,
   AdminEmptyState,
+  AdminSelect,
 } from "@/components/admin/primitives";
+import { adminNativeScrollbarClassName } from "@/components/admin/admin-scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 import {
   addGalleryItemsAction,
@@ -133,6 +134,8 @@ export function GalleryWorkspace({
   const [status, setStatus] = useState<"draft" | "published">(gallery.status as "draft" | "published");
   const [version, setVersion] = useState(gallery.version);
   const [isSavingMeta, setIsSavingMeta] = useState(false);
+  const mutationPendingRef = useRef(false);
+  const [isMutating, setIsMutating] = useState(false);
 
   // Items state
   const [items, setItems] = useState<GalleryItemDetail[]>(initialItems);
@@ -141,9 +144,25 @@ export function GalleryWorkspace({
   const [youtubeInput, setYoutubeInput] = useState("");
   const [youtubeCaption, setYoutubeCaption] = useState("");
   const [deleteItemTarget, setDeleteItemTarget] = useState<GalleryItemDetail | null>(null);
+  const [captionDrafts, setCaptionDrafts] = useState<Record<string, string>>({});
 
   // View state
   const [viewMode, setViewMode] = useState<"split" | "editor" | "preview">("split");
+
+  const beginMutation = () => {
+    if (mutationPendingRef.current) {
+      toast.info("Tunggu perubahan sebelumnya selesai");
+      return false;
+    }
+    mutationPendingRef.current = true;
+    setIsMutating(true);
+    return true;
+  };
+
+  const endMutation = () => {
+    mutationPendingRef.current = false;
+    setIsMutating(false);
+  };
 
   const handleSaveMeta = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,10 +175,11 @@ export function GalleryWorkspace({
       toast.error("Format slug tidak valid");
       return;
     }
+    if (!beginMutation()) return;
 
     setIsSavingMeta(true);
     try {
-      await updateGalleryAction({
+      const result = await updateGalleryAction({
         id: gallery.id,
         title: title.trim(),
         slug: finalSlug,
@@ -170,49 +190,59 @@ export function GalleryWorkspace({
         status,
         version,
       });
-      setVersion((v) => v + 1);
-      toast.success("Metadata album berhasil diperbarui");
+      setVersion(result.version);
+      toast.success("Detail album disimpan");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menyimpan metadata";
       toast.error(msg);
     } finally {
       setIsSavingMeta(false);
+      endMutation();
     }
   };
 
   const handleBatchSelectMedia = async (selectedAssets: MediaAssetSummary[]) => {
     if (!selectedAssets || selectedAssets.length === 0) return;
-    const mediaIds = selectedAssets.map((a) => a.id);
+    const existingMediaIds = new Set(items.flatMap((item) => (item.mediaId ? [item.mediaId] : [])));
+    const uniqueAssets = selectedAssets.filter(
+      (asset, index, assets) =>
+        !existingMediaIds.has(asset.id) && assets.findIndex((candidate) => candidate.id === asset.id) === index
+    );
+    if (uniqueAssets.length === 0) {
+      toast.info("Semua media sudah ada di album");
+      return;
+    }
+    const mediaIds = uniqueAssets.map((asset) => asset.id);
+    if (!beginMutation()) return;
     try {
-      await addGalleryItemsAction({
+      const result = await addGalleryItemsAction({
         galleryId: gallery.id,
+        expectedGalleryVersion: version,
         mediaIds,
       });
 
-      // Optimistic update
-      const now = new Date().toISOString();
-      const newItems: GalleryItemDetail[] = selectedAssets.map((asset, idx) => ({
-        id: crypto.randomUUID(),
+      const assetMap = new Map(uniqueAssets.map((asset) => [asset.id, asset]));
+      const newItems: GalleryItemDetail[] = result.items.map((item) => ({
+        ...item,
         galleryId: gallery.id,
-        mediaId: asset.id,
-        youtubeId: null,
-        caption: null,
-        displayOrder: items.length + idx + 1,
         active: true,
-        media: asset,
+        media: item.mediaId ? assetMap.get(item.mediaId) ?? null : null,
       }));
       setItems((prev) => [...prev, ...newItems]);
-      toast.success(`${selectedAssets.length} foto berhasil ditambahkan ke album`);
+      setVersion(result.version);
+      toast.success(`${uniqueAssets.length} foto berhasil ditambahkan ke album`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menambahkan foto";
       toast.error(msg);
+    } finally {
+      endMutation();
     }
   };
 
   const handleAddYoutube = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!youtubeInput.trim()) {
-      toast.error("Masukkan YouTube Video ID atau URL");
+      toast.error("Masukkan ID atau tautan YouTube");
       return;
     }
 
@@ -223,29 +253,30 @@ export function GalleryWorkspace({
       ytId = urlMatch[1];
     }
 
-    if (!/^[\w-]{6,20}$/.test(ytId)) {
+    if (!/^[\w-]{11}$/.test(ytId)) {
       toast.error("Format ID YouTube tidak valid");
       return;
     }
+    if (!beginMutation()) return;
 
     try {
-      await addGalleryItemsAction({
+      const result = await addGalleryItemsAction({
         galleryId: gallery.id,
+        expectedGalleryVersion: version,
         youtubeId: ytId,
         caption: youtubeCaption.trim() || null,
       });
 
+      const createdItem = result.items[0];
+      if (!createdItem) throw new Error("Item video tidak berhasil dibuat");
       const newItem: GalleryItemDetail = {
-        id: crypto.randomUUID(),
+        ...createdItem,
         galleryId: gallery.id,
-        mediaId: null,
-        youtubeId: ytId,
-        caption: youtubeCaption.trim() || null,
-        displayOrder: items.length + 1,
         active: true,
         media: null,
       };
       setItems((prev) => [...prev, newItem]);
+      setVersion(result.version);
       toast.success("Video YouTube berhasil ditambahkan");
       setYoutubeDialogOpen(false);
       setYoutubeInput("");
@@ -253,6 +284,8 @@ export function GalleryWorkspace({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menambahkan video YouTube";
       toast.error(msg);
+    } finally {
+      endMutation();
     }
   };
 
@@ -266,43 +299,78 @@ export function GalleryWorkspace({
 
     // Reassign order
     const updated = newItems.map((item, idx) => ({ ...item, displayOrder: idx + 1 }));
-    setItems(updated);
-
+    if (!beginMutation()) return;
     try {
-      await reorderGalleryItemsAction({
+      const result = await reorderGalleryItemsAction({
         galleryId: gallery.id,
         itemIds: updated.map((i) => i.id),
+        expectedGalleryVersion: version,
       });
-    } catch {
-      toast.error("Gagal menyimpan urutan item");
+      setItems(updated);
+      setVersion(result.version);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Gagal menyimpan urutan item";
+      toast.error(message);
+    } finally {
+      endMutation();
     }
   };
 
   const handleDeleteItem = async () => {
     if (!deleteItemTarget) return;
+    if (!beginMutation()) return;
     try {
-      await deleteGalleryItemAction({ itemId: deleteItemTarget.id });
+      const result = await deleteGalleryItemAction({
+        itemId: deleteItemTarget.id,
+        expectedGalleryVersion: version,
+      });
       setItems((prev) => prev.filter((i) => i.id !== deleteItemTarget.id));
+      setVersion(result.version);
       toast.success("Item berhasil dihapus dari album");
       setDeleteItemTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menghapus item";
       toast.error(msg);
+    } finally {
+      endMutation();
     }
   };
 
   const handleUpdateItemCaption = async (item: GalleryItemDetail, newCaption: string) => {
+    if (!beginMutation()) {
+      setCaptionDrafts((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      return;
+    }
     try {
-      await updateGalleryItemAction({
+      const result = await updateGalleryItemAction({
         itemId: item.id,
+        expectedGalleryVersion: version,
         caption: newCaption,
       });
       setItems((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, caption: newCaption } : i)),
       );
+      setCaptionDrafts((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      setVersion(result.version);
       toast.success("Keterangan item disimpan");
-    } catch {
-      toast.error("Gagal menyimpan keterangan");
+    } catch (err: unknown) {
+      setCaptionDrafts((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      const message = err instanceof Error ? err.message : "Gagal menyimpan keterangan";
+      toast.error(message);
+    } finally {
+      endMutation();
     }
   };
 
@@ -319,7 +387,7 @@ export function GalleryWorkspace({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-montserrat text-sm font-semibold text-foreground">
-                {title || "Album Galeri"}
+                {title || "Album galeri"}
               </h2>
               <AdminBadge value={status} />
             </div>
@@ -363,14 +431,15 @@ export function GalleryWorkspace({
         {(viewMode === "editor" || viewMode === "split") && (
           <div className={`${viewMode === "split" ? "lg:col-span-7" : "max-w-4xl mx-auto w-full"} space-y-6`}>
             {/* Metadata Card */}
-            <AdminCard className="p-5 space-y-4">
+            <AdminCard className="space-y-4 p-5 sm:p-5">
               <AdminCardHeader
-                eyebrow="Metadata Album"
-                title="Pengaturan Album Galeri"
-                description="Ubah judul, slug, cover, dan pengelompokan album."
+                eyebrow="Album"
+                title="Detail album"
+                description="Atur identitas, sampul, dan kaitan acara."
               />
 
               <form onSubmit={handleSaveMeta} className="space-y-4">
+                <fieldset disabled={!canEdit} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium">Judul Album *</label>
                   <Input
@@ -403,43 +472,43 @@ export function GalleryWorkspace({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium">Tipe Album</label>
-                    <select
+                    <AdminSelect
+                      aria-label="Tipe album"
                       value={ownerType}
-                      onChange={(e) => setOwnerType(e.target.value as "standalone" | "event")}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
-                    >
-                      <option value="standalone">Standalone (Umum)</option>
-                      <option value="event">Terkait Rangkaian Acara</option>
-                    </select>
+                      onValueChange={(value) => setOwnerType(value as "standalone" | "event")}
+                      className="h-9 w-full text-xs"
+                      options={[
+                        { value: "standalone", label: "Umum" },
+                        { value: "event", label: "Terkait acara" },
+                      ]}
+                    />
                   </div>
 
                   {ownerType === "event" ? (
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium">Pilih Acara *</label>
-                      <select
+                      <AdminSelect
+                        aria-label="Pilih acara"
                         value={ownerId}
-                        onChange={(e) => setOwnerId(e.target.value)}
-                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
+                        onValueChange={setOwnerId}
                         required
-                      >
-                        {eventsList.map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.label}
-                          </option>
-                        ))}
-                      </select>
+                        className="h-9 w-full text-xs"
+                        options={eventsList.map((ev) => ({ value: ev.id, label: ev.label }))}
+                      />
                     </div>
                   ) : (
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium">Status Publikasi</label>
-                      <select
+                      <AdminSelect
+                        aria-label="Status publikasi album"
                         value={status}
-                        onChange={(e) => setStatus(e.target.value as "published" | "draft")}
-                        className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus:outline-hidden"
-                      >
-                        <option value="published">Published</option>
-                        <option value="draft">Draft</option>
-                      </select>
+                        onValueChange={(value) => setStatus(value as "published" | "draft")}
+                        className="h-9 w-full text-xs"
+                        options={[
+                          { value: "published", label: "Terbit" },
+                          { value: "draft", label: "Draf" },
+                        ]}
+                      />
                     </div>
                   )}
                 </div>
@@ -460,25 +529,26 @@ export function GalleryWorkspace({
                   />
                 </div>
 
-                <div className="flex justify-end pt-3 border-t border-border">
+                <div className="flex justify-end border-t border-border pt-3">
                   <Button
                     type="submit"
-                    disabled={isSavingMeta}
+                    disabled={isSavingMeta || isMutating}
                     className="bg-dgb hover:bg-dgb/90 text-white text-xs h-8"
                   >
                     <Save size={13} className="mr-1.5" />
-                    {isSavingMeta ? "Menyimpan..." : "Simpan Metadata"}
+                    {isSavingMeta ? "Menyimpan..." : "Simpan detail"}
                   </Button>
                 </div>
+                </fieldset>
               </form>
             </AdminCard>
 
             {/* Items Management Card */}
-            <AdminCard className="p-5 space-y-4">
+            <AdminCard className="space-y-4 p-5 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
                 <div>
                   <h3 className="font-montserrat text-sm font-semibold text-foreground">
-                    Daftar Foto & Video ({items.length})
+                    Foto dan video ({items.length})
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     Pilih beberapa foto sekaligus atau tambahkan video YouTube.
@@ -488,12 +558,14 @@ export function GalleryWorkspace({
                 {canEdit && (
                   <div className="flex items-center gap-2">
                     <Button
+                      disabled={isMutating}
                       onClick={() => setBatchPickerOpen(true)}
                       className="bg-dgb hover:bg-dgb/90 text-white text-xs h-8"
                     >
-                      <ImageIcon size={13} className="mr-1.5" /> Pilih Banyak Foto
+                      <ImageIcon size={13} className="mr-1.5" /> Pilih foto
                     </Button>
                     <Button
+                      disabled={isMutating}
                       onClick={() => setYoutubeDialogOpen(true)}
                       variant="outline"
                       className="text-xs h-8"
@@ -509,7 +581,7 @@ export function GalleryWorkspace({
                 <AdminEmptyState
                   icon="gallery"
                   title="Album masih kosong"
-                  description="Gunakan tombol Pilih Banyak Foto atau Tambah YouTube di atas untuk mengisi album galeri ini."
+                  description="Pilih foto atau tambahkan video YouTube."
                 />
               ) : (
                 <div className="space-y-3">
@@ -533,7 +605,7 @@ export function GalleryWorkspace({
                             <div className="relative h-full w-full bg-black/80 flex items-center justify-center">
                               <Image
                                 src={`https://img.youtube.com/vi/${item.youtubeId}/hqdefault.jpg`}
-                                alt="YouTube Thumbnail"
+                                alt="Pratinjau YouTube"
                                 fill
                                 className="object-cover opacity-80"
                                 sizes="80px"
@@ -563,7 +635,14 @@ export function GalleryWorkspace({
                             )}
                           </div>
                           <Input
-                            defaultValue={item.caption ?? ""}
+                            disabled={!canEdit || isMutating}
+                            value={captionDrafts[item.id] ?? item.caption ?? ""}
+                            onChange={(event) =>
+                              setCaptionDrafts((current) => ({
+                                ...current,
+                                [item.id]: event.target.value,
+                              }))
+                            }
                             onBlur={(e) => {
                               if (e.target.value !== (item.caption ?? "")) {
                                 handleUpdateItemCaption(item, e.target.value);
@@ -582,7 +661,7 @@ export function GalleryWorkspace({
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={idx === 0}
+                              disabled={isMutating || idx === 0}
                               onClick={() => handleMoveItem(idx, "up")}
                               className="h-7 w-7 p-0"
                               title="Pindahkan ke atas"
@@ -592,7 +671,7 @@ export function GalleryWorkspace({
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={idx === items.length - 1}
+                              disabled={isMutating || idx === items.length - 1}
                               onClick={() => handleMoveItem(idx, "down")}
                               className="h-7 w-7 p-0"
                               title="Pindahkan ke bawah"
@@ -603,6 +682,7 @@ export function GalleryWorkspace({
                               variant="ghost"
                               size="sm"
                               onClick={() => setDeleteItemTarget(item)}
+                              disabled={isMutating}
                               className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                               title="Hapus item"
                             >
@@ -625,7 +705,7 @@ export function GalleryWorkspace({
             <div className="rounded-xl border border-border bg-card p-4 shadow-xs sticky top-4 space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <span className="font-montserrat text-xs font-bold uppercase tracking-wider text-fb">
-                  Live Preview Publik
+                  Pratinjau publik
                 </span>
                 <span className="text-[11px] text-muted-foreground font-mono">
                   {editionName}
@@ -640,7 +720,7 @@ export function GalleryWorkspace({
                     Daftar Album
                   </p>
                   <div className="space-y-1">
-                    {siblingGalleries.map((sib, sIdx) => {
+                    {siblingGalleries.map((sib) => {
                       const isCurrent = sib.id === gallery.id;
                       return (
                         <div
@@ -664,7 +744,7 @@ export function GalleryWorkspace({
                 </div>
 
                 {/* Right Album Gallery Grid Section */}
-                <div className="col-span-8 pl-1 space-y-3 overflow-y-auto max-h-[500px]">
+                <div className={cn("col-span-8 pl-1 space-y-3 overflow-y-auto max-h-[500px]", adminNativeScrollbarClassName)}>
                   <div>
                     <h4 className="font-montserrat text-sm font-bold text-foreground">
                       {title || "Judul Album"}
@@ -700,7 +780,7 @@ export function GalleryWorkspace({
                             <div className="relative h-full w-full bg-black flex items-center justify-center">
                               <Image
                                 src={`https://img.youtube.com/vi/${item.youtubeId}/hqdefault.jpg`}
-                                alt="YouTube Thumbnail"
+                                alt="Pratinjau YouTube"
                                 fill
                                 className="object-cover opacity-80"
                                 sizes="160px"
@@ -731,7 +811,8 @@ export function GalleryWorkspace({
       <AdminMediaPicker
         open={batchPickerOpen}
         onOpenChange={setBatchPickerOpen}
-        onSelect={(asset) => void handleBatchSelectMedia([asset])}
+        multiple
+        onSelectMany={(assets) => void handleBatchSelectMedia(assets)}
         canManageMedia={canEdit}
         activeEditionId={editionId}
       />

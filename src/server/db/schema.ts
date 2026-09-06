@@ -1,4 +1,5 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export const categoryValues = ['JD', 'MD', 'JR', 'MR'] as const;
 export type Category = (typeof categoryValues)[number];
@@ -305,9 +306,74 @@ export const organizationAssignments = sqliteTable('organizationAssignment', {
 export const categories = sqliteTable('category', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), editionId: text('editionId').notNull().references(() => editions.id), code: text('code').notNull(), slug: text('slug').notNull(), label: text('label').notNull(), displayOrder: integer('displayOrder').notNull().default(0), active: integer('active',{mode:'boolean'}).notNull().default(true), ...authTimestamps,
 }, (t) => [uniqueIndex('category_edition_code_unique').on(t.editionId,t.code), uniqueIndex('category_edition_slug_unique').on(t.editionId,t.slug)]);
+
+export const selectionStageLifecycles = ['draft', 'active', 'closed'] as const;
+export type SelectionStageLifecycle = (typeof selectionStageLifecycles)[number];
+export const stageDecisions = ['pending', 'advanced', 'eliminated'] as const;
+export type StageDecision = (typeof stageDecisions)[number];
+export const participantSelectionStatuses = ['registered', 'active', 'eliminated', 'completed'] as const;
+export type ParticipantSelectionStatus = (typeof participantSelectionStatuses)[number];
+
+export const selectionStages = sqliteTable('selectionStage', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  editionId: text('editionId').notNull().references(() => editions.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  slug: text('slug').notNull(),
+  displayOrder: integer('displayOrder').notNull().default(0),
+  targetParticipantCount: integer('targetParticipantCount').notNull().default(0),
+  lifecycle: text('lifecycle', { enum: selectionStageLifecycles }).notNull().default('draft'),
+  finalStage: integer('finalStage', { mode: 'boolean' }).notNull().default(false),
+  version: integer('version').notNull().default(1),
+  ...authTimestamps,
+}, (t) => [
+  uniqueIndex('selection_stage_edition_slug_unique').on(t.editionId, t.slug),
+  index('selection_stage_edition_order_idx').on(t.editionId, t.displayOrder),
+]);
+
 export const participants = sqliteTable('participant', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), editionId: text('editionId').notNull().references(() => editions.id), categoryId: text('categoryId').notNull().references(() => categories.id), stage: text('stage').notNull(), number: integer('number').notNull(), name: text('name').notNull(), slug: text('slug').notNull(), bio: text('bio'), portraitMediaId: text('portraitMediaId').references(() => mediaAssets.id), qrisMediaId: text('qrisMediaId').references(() => mediaAssets.id), paymentUrl: text('paymentUrl'), displayOrder: integer('displayOrder').notNull().default(0), active: integer('active',{mode:'boolean'}).notNull().default(true), version: integer('version').notNull().default(1), ...authTimestamps,
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), editionId: text('editionId').notNull().references(() => editions.id), categoryId: text('categoryId').notNull().references(() => categories.id), stage: text('stage').notNull(), currentStageId: text('currentStageId').references(() => selectionStages.id, { onDelete: 'restrict' }), selectionStatus: text('selectionStatus', { enum: participantSelectionStatuses }).notNull().default('registered'), number: integer('number').notNull(), name: text('name').notNull(), slug: text('slug').notNull(), bio: text('bio'), portraitMediaId: text('portraitMediaId').references(() => mediaAssets.id), qrisMediaId: text('qrisMediaId').references(() => mediaAssets.id), paymentUrl: text('paymentUrl'), displayOrder: integer('displayOrder').notNull().default(0), active: integer('active',{mode:'boolean'}).notNull().default(true), version: integer('version').notNull().default(1), ...authTimestamps,
 }, (t) => [uniqueIndex('participant_edition_stage_slug_unique').on(t.editionId,t.stage,t.slug)]);
+
+export const participantStageEntries = sqliteTable('participantStageEntry', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  participantId: text('participantId').notNull().references(() => participants.id, { onDelete: 'cascade' }),
+  stageId: text('stageId').notNull().references(() => selectionStages.id, { onDelete: 'cascade' }),
+  decision: text('decision', { enum: stageDecisions }).notNull().default('pending'),
+  decidedAt: integer('decidedAt', { mode: 'timestamp_ms' }),
+  decidedByUserId: text('decidedByUserId').references(() => authUsers.id, { onDelete: 'set null' }),
+  reason: text('reason'),
+  version: integer('version').notNull().default(1),
+  ...authTimestamps,
+}, (t) => [
+  uniqueIndex('participant_stage_entry_unique').on(t.participantId, t.stageId),
+  index('participant_stage_entry_stage_idx').on(t.stageId),
+  index('participant_stage_entry_participant_idx').on(t.participantId),
+]);
+
+export const editionTitles = sqliteTable('editionTitle', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  editionId: text('editionId').notNull().references(() => editions.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  capacity: integer('capacity').notNull().default(1),
+  displayOrder: integer('displayOrder').notNull().default(0),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  version: integer('version').notNull().default(1),
+  ...authTimestamps,
+}, (t) => [
+  uniqueIndex('edition_title_edition_name_unique').on(t.editionId, t.name),
+  index('edition_title_edition_order_idx').on(t.editionId, t.displayOrder),
+]);
+
+export const participantTitleAssignments = sqliteTable('participantTitleAssignment', {
+  editionTitleId: text('editionTitleId').notNull().references(() => editionTitles.id, { onDelete: 'cascade' }),
+  participantId: text('participantId').notNull().references(() => participants.id, { onDelete: 'cascade' }),
+  assignedAt: integer('assignedAt', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+  assignedByUserId: text('assignedByUserId').references(() => authUsers.id, { onDelete: 'set null' }),
+}, (t) => [
+  primaryKey({ columns: [t.editionTitleId, t.participantId] }),
+  index('participant_title_assignment_participant_idx').on(t.participantId),
+]);
 export const participantAchievements = sqliteTable('participantAchievement', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), participantId: text('participantId').notNull().references(() => participants.id,{onDelete:'cascade'}), text: text('text').notNull(), displayOrder: integer('displayOrder').notNull().default(0), ...authTimestamps,
 });
@@ -396,10 +462,26 @@ export const galleryItems = sqliteTable('galleryItem', {
 }, (t) => [
   index('gallery_item_gallery_idx').on(t.galleryId),
   index('gallery_item_media_idx').on(t.mediaId),
+  check(
+    'gallery_item_exactly_one_source',
+    sql`((${t.mediaId} is not null) and (${t.youtubeId} is null)) or ((${t.mediaId} is null) and (${t.youtubeId} is not null))`,
+  ),
 ]);
 export const votingCampaigns = sqliteTable('votingCampaign', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), editionId: text('editionId').notNull().references(() => editions.id), name: text('name').notNull(), slug: text('slug').notNull().unique(), timezone: text('timezone').notNull().default('Asia/Jakarta'), startsAt: integer('startsAt',{mode:'timestamp_ms'}).notNull(), endsAt: integer('endsAt',{mode:'timestamp_ms'}).notNull(), status: text('status').notNull().default('draft'), pricePerPoint: integer('pricePerPoint').notNull().default(0), resultVisibility: text('resultVisibility').notNull().default('hidden'), version: integer('version').notNull().default(1), ...authTimestamps,
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), editionId: text('editionId').notNull().references(() => editions.id), eligibilityStageId: text('eligibilityStageId').references(() => selectionStages.id, { onDelete: 'restrict' }), name: text('name').notNull(), slug: text('slug').notNull().unique(), timezone: text('timezone').notNull().default('Asia/Jakarta'), startsAt: integer('startsAt',{mode:'timestamp_ms'}).notNull(), endsAt: integer('endsAt',{mode:'timestamp_ms'}).notNull(), startedAt: integer('startedAt', { mode: 'timestamp_ms' }), closedAt: integer('closedAt', { mode: 'timestamp_ms' }), status: text('status').notNull().default('draft'), pricePerPoint: integer('pricePerPoint').notNull().default(0), resultVisibility: text('resultVisibility').notNull().default('hidden'), version: integer('version').notNull().default(1), ...authTimestamps,
 });
+
+export const votingCampaignParticipants = sqliteTable('votingCampaignParticipant', {
+  campaignId: text('campaignId').notNull().references(() => votingCampaigns.id, { onDelete: 'cascade' }),
+  participantId: text('participantId').notNull().references(() => participants.id, { onDelete: 'restrict' }),
+  sourceStageId: text('sourceStageId').references(() => selectionStages.id, { onDelete: 'set null' }),
+  addedAt: integer('addedAt', { mode: 'timestamp_ms' }).notNull().$defaultFn(() => new Date()),
+}, (t) => [
+  primaryKey({ columns: [t.campaignId, t.participantId] }),
+  index('voting_campaign_participant_participant_idx').on(t.participantId),
+  index('voting_campaign_participant_stage_idx').on(t.sourceStageId),
+]);
+
 export const voteDailyTallies = sqliteTable('voteDailyTally', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()), campaignId: text('campaignId').notNull().references(() => votingCampaigns.id), participantId: text('participantId').notNull().references(() => participants.id), localDate: text('localDate').notNull(), amount: integer('amount').notNull().default(0), version: integer('version').notNull().default(1), ...authTimestamps,
 }, (t) => [uniqueIndex('vote_tally_unique').on(t.campaignId,t.participantId,t.localDate)]);
@@ -465,6 +547,11 @@ export type PersonRow = typeof people.$inferSelect;
 export type OrganizationAssignmentRow = typeof organizationAssignments.$inferSelect;
 export type CommitteeUnitRow = typeof committeeUnits.$inferSelect;
 export type CommitteeAssignmentRow = typeof committeeAssignments.$inferSelect;
+export type SelectionStageRow = typeof selectionStages.$inferSelect;
+export type ParticipantStageEntryRow = typeof participantStageEntries.$inferSelect;
+export type EditionTitleRow = typeof editionTitles.$inferSelect;
+export type ParticipantTitleAssignmentRow = typeof participantTitleAssignments.$inferSelect;
+export type VotingCampaignParticipantRow = typeof votingCampaignParticipants.$inferSelect;
 export type ParticipantRow = typeof participants.$inferSelect;
 export type ParticipantAchievementRow = typeof participantAchievements.$inferSelect;
 export type ParticipantSocialLinkRow = typeof participantSocialLinks.$inferSelect;

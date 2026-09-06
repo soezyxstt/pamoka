@@ -10,8 +10,12 @@ import { NewGalleryForm } from "./new-gallery-form";
 
 export const metadata = { title: "Buat Album Galeri Baru" };
 
-export default async function NewGalleryPage() {
-  const actor = await requirePermission("gallery.manage");
+export default async function NewGalleryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ eventId?: string }>;
+}) {
+  await requirePermission("gallery.manage");
   const currentEdition = await getAdminEditionContext();
 
   if (!currentEdition) {
@@ -23,6 +27,7 @@ export default async function NewGalleryPage() {
     .from(events)
     .where(eq(events.editionId, currentEdition.id))
     .orderBy(asc(events.displayOrder));
+  const requestedEventId = (await searchParams).eventId;
 
   return (
     <AdminPage
@@ -34,6 +39,7 @@ export default async function NewGalleryPage() {
         editionName={currentEdition.name}
         editionId={currentEdition.id}
         eventsList={eventRows}
+        initialEventId={requestedEventId}
       />
     </AdminPage>
   );

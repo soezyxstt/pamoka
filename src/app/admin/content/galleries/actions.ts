@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { appendAuditLog } from "@/server/auth/audit";
@@ -8,6 +8,31 @@ import { requirePermission } from "@/server/auth/authorization";
 import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
 import { events, galleries, galleryItems, mediaAssets } from "@/server/db/schema";
+import {
+  assertCompleteGalleryItemOrder,
+  normalizeYoutubeId,
+} from "@/server/gallery-validation";
+
+const concurrentEditMessage =
+  "Data galeri telah diperbarui oleh pengguna lain. Silakan muat ulang.";
+
+async function requireReadyImages(mediaIds: string[]) {
+  const uniqueIds = [...new Set(mediaIds.filter(Boolean))];
+  if (uniqueIds.length === 0) return;
+
+  const rows = await database
+    .select({ id: mediaAssets.id, mimeType: mediaAssets.mimeType, lifecycle: mediaAssets.lifecycle })
+    .from(mediaAssets)
+    .where(inArray(mediaAssets.id, uniqueIds));
+  const validIds = new Set(
+    rows
+      .filter((asset) => asset.lifecycle === "ready" && asset.mimeType.startsWith("image/"))
+      .map((asset) => asset.id),
+  );
+  if (uniqueIds.some((id) => !validIds.has(id))) {
+    throw new Error("Pilih gambar dari pustaka media yang sudah siap");
+  }
+}
 
 export async function createGalleryAction(input: {
   title: string;
@@ -33,6 +58,7 @@ export async function createGalleryAction(input: {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     throw new Error("Format slug tidak valid");
   }
+  await requireReadyImages(input.coverMediaId ? [input.coverMediaId] : []);
 
   let finalOwnerId = input.ownerId?.trim() || "";
   if (input.ownerType === "event") {
@@ -62,6 +88,16 @@ export async function createGalleryAction(input: {
   const now = new Date();
 
   await database.transaction(async (tx) => {
+    if (input.ownerType === "event") {
+      const [targetEvent] = await tx
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.id, finalOwnerId), eq(events.editionId, edition.id)))
+        .limit(1);
+      if (!targetEvent) {
+        throw new Error("Acara yang dipilih tidak ditemukan pada edisi ini");
+      }
+    }
     await tx.insert(galleries).values({
       id: galleryId,
       editionId: edition.id,
@@ -129,7 +165,7 @@ export async function updateGalleryAction(input: {
     throw new Error("Galeri tidak ditemukan");
   }
   if (existing.version !== input.version) {
-    throw new Error("Data galeri telah diperbarui oleh pengguna lain. Silakan muat ulang.");
+    throw new Error(concurrentEditMessage);
   }
 
   const title = input.title.trim();
@@ -140,6 +176,7 @@ export async function updateGalleryAction(input: {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     throw new Error("Format slug tidak valid");
   }
+  await requireReadyImages(input.coverMediaId ? [input.coverMediaId] : []);
 
   let finalOwnerId = input.ownerId?.trim() || "";
   if (input.ownerType === "event") {
@@ -168,7 +205,17 @@ export async function updateGalleryAction(input: {
   const now = new Date();
 
   await database.transaction(async (tx) => {
-    await tx
+    if (input.ownerType === "event") {
+      const [targetEvent] = await tx
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.id, finalOwnerId), eq(events.editionId, edition.id)))
+        .limit(1);
+      if (!targetEvent) {
+        throw new Error("Acara yang dipilih tidak ditemukan pada edisi ini");
+      }
+    }
+    const changed = await tx
       .update(galleries)
       .set({
         title,
@@ -183,7 +230,17 @@ export async function updateGalleryAction(input: {
         version: existing.version + 1,
         updatedAt: now,
       })
-      .where(eq(galleries.id, input.id));
+      .where(
+        and(
+          eq(galleries.id, input.id),
+          eq(galleries.editionId, edition.id),
+          eq(galleries.version, input.version),
+        ),
+      )
+      .returning({ id: galleries.id });
+    if (changed.length !== 1) {
+      throw new Error(concurrentEditMessage);
+    }
 
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
@@ -196,22 +253,39 @@ export async function updateGalleryAction(input: {
       after: {
         title,
         slug,
-        description: input.description,
-        coverMediaId: input.coverMediaId,
+        description:
+          input.description !== undefined ? input.description?.trim() || null : existing.description,
+        coverMediaId:
+          input.coverMediaId !== undefined ? input.coverMediaId : existing.coverMediaId,
         ownerType: input.ownerType,
         ownerId: finalOwnerId,
+        displayOrder: input.displayOrder ?? existing.displayOrder,
+        status: input.status ?? existing.status,
+        active: input.active ?? existing.active,
+        version: existing.version + 1,
       },
-      changedFields: ["title", "slug", "description", "coverMediaId", "ownerType", "ownerId", "version"],
+      changedFields: [
+        "title",
+        "slug",
+        "description",
+        "coverMediaId",
+        "ownerType",
+        "ownerId",
+        "displayOrder",
+        "status",
+        "active",
+        "version",
+      ],
       source: "admin-galleries",
     });
   });
 
   revalidatePath("/admin/content/galleries");
   revalidatePath(`/admin/content/galleries/${input.id}`);
-  return { success: true };
+  return { success: true, version: input.version + 1 };
 }
 
-export async function deleteGalleryAction(input: { id: string }) {
+export async function deleteGalleryAction(input: { id: string; expectedVersion: number }) {
   const actor = await requirePermission("gallery.manage");
   const edition = await getAdminEditionContext();
   if (!edition) {
@@ -225,9 +299,24 @@ export async function deleteGalleryAction(input: { id: string }) {
   if (!existing) {
     throw new Error("Galeri tidak ditemukan");
   }
+  if (existing.version !== input.expectedVersion) {
+    throw new Error(concurrentEditMessage);
+  }
 
   await database.transaction(async (tx) => {
-    await tx.delete(galleries).where(eq(galleries.id, input.id));
+    const deleted = await tx
+      .delete(galleries)
+      .where(
+        and(
+          eq(galleries.id, input.id),
+          eq(galleries.editionId, edition.id),
+          eq(galleries.version, input.expectedVersion),
+        ),
+      )
+      .returning({ id: galleries.id });
+    if (deleted.length !== 1) {
+      throw new Error(concurrentEditMessage);
+    }
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
       actorLabel: actor.session.user.email,
@@ -247,20 +336,42 @@ export async function deleteGalleryAction(input: { id: string }) {
 
 export async function addGalleryItemsAction(input: {
   galleryId: string;
+  expectedGalleryVersion: number;
   mediaIds?: string[];
   youtubeId?: string | null;
   caption?: string | null;
 }) {
   const actor = await requirePermission("gallery.manage");
+  const edition = await getAdminEditionContext();
+  if (!edition) {
+    throw new Error("Konteks edisi aktif tidak ditemukan");
+  }
   const [gallery] = await database
     .select()
     .from(galleries)
-    .where(eq(galleries.id, input.galleryId));
+    .where(and(eq(galleries.id, input.galleryId), eq(galleries.editionId, edition.id)));
   if (!gallery) {
     throw new Error("Galeri tidak ditemukan");
   }
+  if (gallery.version !== input.expectedGalleryVersion) {
+    throw new Error(concurrentEditMessage);
+  }
+
+  const mediaIds = [...new Set((input.mediaIds ?? []).filter(Boolean))];
+  const youtubeId = normalizeYoutubeId(input.youtubeId);
+  if (mediaIds.length === 0 && !youtubeId) {
+    throw new Error("Pilih minimal satu foto atau video YouTube");
+  }
+  await requireReadyImages(mediaIds);
 
   const now = new Date();
+  const createdItems: Array<{
+    id: string;
+    mediaId: string | null;
+    youtubeId: string | null;
+    caption: string | null;
+    displayOrder: number;
+  }> = [];
 
   // Ambil item terakhir untuk displayOrder
   const existingItems = await database
@@ -273,39 +384,68 @@ export async function addGalleryItemsAction(input: {
 
   await database.transaction(async (tx) => {
     // 1. YouTube video insertion (single)
-    if (input.youtubeId && input.youtubeId.trim()) {
-      const cleanYoutubeId = input.youtubeId.trim();
+    if (youtubeId) {
       const itemId = crypto.randomUUID();
+      const displayOrder = startOrder++;
       await tx.insert(galleryItems).values({
         id: itemId,
         galleryId: input.galleryId,
         mediaId: null,
-        youtubeId: cleanYoutubeId,
+        youtubeId,
         caption: input.caption?.trim() || null,
-        displayOrder: startOrder++,
+        displayOrder,
         active: true,
         createdAt: now,
         updatedAt: now,
       });
+      createdItems.push({
+        id: itemId,
+        mediaId: null,
+        youtubeId,
+        caption: input.caption?.trim() || null,
+        displayOrder,
+      });
     }
 
     // 2. Batch Media assets insertion
-    if (input.mediaIds && input.mediaIds.length > 0) {
-      for (const mediaId of input.mediaIds) {
-        if (!mediaId) continue;
+    if (mediaIds.length > 0) {
+      for (const mediaId of mediaIds) {
         const itemId = crypto.randomUUID();
+        const displayOrder = startOrder++;
         await tx.insert(galleryItems).values({
           id: itemId,
           galleryId: input.galleryId,
           mediaId,
           youtubeId: null,
           caption: input.caption?.trim() || null,
-          displayOrder: startOrder++,
+          displayOrder,
           active: true,
           createdAt: now,
           updatedAt: now,
         });
+        createdItems.push({
+          id: itemId,
+          mediaId,
+          youtubeId: null,
+          caption: input.caption?.trim() || null,
+          displayOrder,
+        });
       }
+    }
+
+    const changed = await tx
+      .update(galleries)
+      .set({ version: gallery.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(galleries.id, input.galleryId),
+          eq(galleries.editionId, edition.id),
+          eq(galleries.version, input.expectedGalleryVersion),
+        ),
+      )
+      .returning({ id: galleries.id });
+    if (changed.length !== 1) {
+      throw new Error(concurrentEditMessage);
     }
 
     await appendAuditLog(tx, {
@@ -316,79 +456,166 @@ export async function addGalleryItemsAction(input: {
       resourceId: input.galleryId,
       resourceLabel: gallery.title,
       after: {
-        mediaCount: input.mediaIds?.length ?? 0,
-        youtubeId: input.youtubeId,
+        mediaCount: mediaIds.length,
+        youtubeId,
       },
-      changedFields: ["items"],
+      changedFields: ["items", "version"],
       source: "admin-galleries",
     });
   });
 
   revalidatePath(`/admin/content/galleries/${input.galleryId}`);
-  return { success: true };
+  return {
+    success: true,
+    version: input.expectedGalleryVersion + 1,
+    items: createdItems,
+  };
 }
 
 export async function updateGalleryItemAction(input: {
   itemId: string;
+  expectedGalleryVersion: number;
   caption?: string | null;
   active?: boolean;
 }) {
-  await requirePermission("gallery.manage");
+  const actor = await requirePermission("gallery.manage");
+  const edition = await getAdminEditionContext();
+  if (!edition) {
+    throw new Error("Konteks edisi aktif tidak ditemukan");
+  }
   const [item] = await database
-    .select()
+    .select({ item: galleryItems, gallery: galleries })
     .from(galleryItems)
-    .where(eq(galleryItems.id, input.itemId));
+    .innerJoin(galleries, eq(galleryItems.galleryId, galleries.id))
+    .where(and(eq(galleryItems.id, input.itemId), eq(galleries.editionId, edition.id)));
   if (!item) {
     throw new Error("Item galeri tidak ditemukan");
+  }
+  if (item.gallery.version !== input.expectedGalleryVersion) {
+    throw new Error(concurrentEditMessage);
   }
 
   const now = new Date();
-  await database
-    .update(galleryItems)
-    .set({
-      caption: input.caption !== undefined ? input.caption?.trim() || null : item.caption,
-      active: input.active !== undefined ? input.active : item.active,
-      updatedAt: now,
-    })
-    .where(eq(galleryItems.id, input.itemId));
+  await database.transaction(async (tx) => {
+    await tx
+      .update(galleryItems)
+      .set({
+        caption:
+          input.caption !== undefined ? input.caption?.trim() || null : item.item.caption,
+        active: input.active !== undefined ? input.active : item.item.active,
+        updatedAt: now,
+      })
+      .where(and(eq(galleryItems.id, input.itemId), eq(galleryItems.galleryId, item.gallery.id)));
+    const changed = await tx
+      .update(galleries)
+      .set({ version: item.gallery.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(galleries.id, item.gallery.id),
+          eq(galleries.editionId, edition.id),
+          eq(galleries.version, input.expectedGalleryVersion),
+        ),
+      )
+      .returning({ id: galleries.id });
+    if (changed.length !== 1) throw new Error(concurrentEditMessage);
+    await appendAuditLog(tx, {
+      actorUserId: actor.session.user.id,
+      actorLabel: actor.session.user.email,
+      action: "gallery.item.update",
+      resourceType: "gallery",
+      resourceId: item.gallery.id,
+      resourceLabel: item.gallery.title,
+      before: item.item,
+      after: { caption: input.caption, active: input.active },
+      changedFields: ["items", "version"],
+      source: "admin-galleries",
+    });
+  });
 
-  revalidatePath(`/admin/content/galleries/${item.galleryId}`);
-  return { success: true };
+  revalidatePath(`/admin/content/galleries/${item.gallery.id}`);
+  return { success: true, version: input.expectedGalleryVersion + 1 };
 }
 
-export async function deleteGalleryItemAction(input: { itemId: string }) {
+export async function deleteGalleryItemAction(input: {
+  itemId: string;
+  expectedGalleryVersion: number;
+}) {
   const actor = await requirePermission("gallery.manage");
+  const edition = await getAdminEditionContext();
+  if (!edition) {
+    throw new Error("Konteks edisi aktif tidak ditemukan");
+  }
   const [item] = await database
-    .select()
+    .select({ item: galleryItems, gallery: galleries })
     .from(galleryItems)
-    .where(eq(galleryItems.id, input.itemId));
+    .innerJoin(galleries, eq(galleryItems.galleryId, galleries.id))
+    .where(and(eq(galleryItems.id, input.itemId), eq(galleries.editionId, edition.id)));
   if (!item) {
     throw new Error("Item galeri tidak ditemukan");
   }
+  if (item.gallery.version !== input.expectedGalleryVersion) {
+    throw new Error(concurrentEditMessage);
+  }
 
+  const now = new Date();
   await database.transaction(async (tx) => {
-    await tx.delete(galleryItems).where(eq(galleryItems.id, input.itemId));
+    await tx
+      .delete(galleryItems)
+      .where(and(eq(galleryItems.id, input.itemId), eq(galleryItems.galleryId, item.gallery.id)));
+    const changed = await tx
+      .update(galleries)
+      .set({ version: item.gallery.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(galleries.id, item.gallery.id),
+          eq(galleries.editionId, edition.id),
+          eq(galleries.version, input.expectedGalleryVersion),
+        ),
+      )
+      .returning({ id: galleries.id });
+    if (changed.length !== 1) throw new Error(concurrentEditMessage);
     await appendAuditLog(tx, {
       actorUserId: actor.session.user.id,
       actorLabel: actor.session.user.email,
       action: "gallery.item.delete",
       resourceType: "gallery",
-      resourceId: item.galleryId,
-      before: item,
-      changedFields: ["items"],
+      resourceId: item.gallery.id,
+      resourceLabel: item.gallery.title,
+      before: item.item,
+      changedFields: ["items", "version"],
       source: "admin-galleries",
     });
   });
 
-  revalidatePath(`/admin/content/galleries/${item.galleryId}`);
-  return { success: true };
+  revalidatePath(`/admin/content/galleries/${item.gallery.id}`);
+  return { success: true, version: input.expectedGalleryVersion + 1 };
 }
 
 export async function reorderGalleryItemsAction(input: {
   galleryId: string;
   itemIds: string[];
+  expectedGalleryVersion: number;
 }) {
-  await requirePermission("gallery.manage");
+  const actor = await requirePermission("gallery.manage");
+  const edition = await getAdminEditionContext();
+  if (!edition) {
+    throw new Error("Konteks edisi aktif tidak ditemukan");
+  }
+  const [gallery] = await database
+    .select()
+    .from(galleries)
+    .where(and(eq(galleries.id, input.galleryId), eq(galleries.editionId, edition.id)));
+  if (!gallery) throw new Error("Galeri tidak ditemukan");
+  if (gallery.version !== input.expectedGalleryVersion) throw new Error(concurrentEditMessage);
+
+  const existingItems = await database
+    .select({ id: galleryItems.id })
+    .from(galleryItems)
+    .where(eq(galleryItems.galleryId, gallery.id));
+  assertCompleteGalleryItemOrder(
+    input.itemIds,
+    existingItems.map((item) => item.id),
+  );
   const now = new Date();
 
   await database.transaction(async (tx) => {
@@ -403,8 +630,31 @@ export async function reorderGalleryItemsAction(input: {
           ),
         );
     }
+    const changed = await tx
+      .update(galleries)
+      .set({ version: gallery.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(galleries.id, gallery.id),
+          eq(galleries.editionId, edition.id),
+          eq(galleries.version, input.expectedGalleryVersion),
+        ),
+      )
+      .returning({ id: galleries.id });
+    if (changed.length !== 1) throw new Error(concurrentEditMessage);
+    await appendAuditLog(tx, {
+      actorUserId: actor.session.user.id,
+      actorLabel: actor.session.user.email,
+      action: "gallery.items.reorder",
+      resourceType: "gallery",
+      resourceId: gallery.id,
+      resourceLabel: gallery.title,
+      after: { itemIds: input.itemIds },
+      changedFields: ["items", "version"],
+      source: "admin-galleries",
+    });
   });
 
   revalidatePath(`/admin/content/galleries/${input.galleryId}`);
-  return { success: true };
+  return { success: true, version: input.expectedGalleryVersion + 1 };
 }

@@ -1,49 +1,40 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import { AdminBadge, AdminPage } from "@/components/admin/primitives";
 import { requirePermission } from "@/server/auth/authorization";
+import { getAdminEditionContext } from "@/server/cms/context";
 import { database } from "@/server/db/client";
 import {
   categories,
+  editionTitles,
   editions,
   mediaAssets,
   participantAchievements,
   participantMedia,
   participantSocialLinks,
+  participantTitleAssignments,
   participants,
+  selectionStages,
 } from "@/server/db/schema";
 import {
   ParticipantDetailWorkspace,
+  type CategoryOption,
   type ParticipantDetail,
 } from "./participant-detail-workspace";
-import type { CategoryOption } from "../participants-list-client";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
-export async function generateMetadata(props: Props) {
-  const { id } = await props.params;
-  const [participant] = await database
-    .select({ name: participants.name, number: participants.number })
-    .from(participants)
-    .where(eq(participants.id, id))
-    .limit(1);
-
-  if (!participant) {
-    return { title: "Peserta Tidak Ditemukan" };
-  }
-
-  return {
-    title: `${participant.name} (#${String(participant.number).padStart(2, "0")}) | Mojang Jajaka`,
-  };
-}
+export const metadata = { title: "Profil Peserta | Mojang Jajaka" };
 
 export default async function ParticipantDetailPage(props: Props) {
   const { effectivePermissions } = await requirePermission("content.view");
-  const canEdit = effectivePermissions.has("participants.manage") || effectivePermissions.has("content.edit");
+  const canEdit = effectivePermissions.has("participants.manage");
   const canManageMedia = effectivePermissions.has("media.manage");
+  const currentEdition = await getAdminEditionContext();
+  if (!currentEdition) notFound();
 
   const { id } = await props.params;
 
@@ -56,17 +47,19 @@ export default async function ParticipantDetailPage(props: Props) {
       number: participants.number,
       name: participants.name,
       slug: participants.slug,
-      stage: participants.stage,
+      currentStageId: participants.currentStageId,
+      currentStageName: selectionStages.name,
+      selectionStatus: participants.selectionStatus,
       bio: participants.bio,
       portraitMediaId: participants.portraitMediaId,
       qrisMediaId: participants.qrisMediaId,
-      paymentUrl: participants.paymentUrl,
       displayOrder: participants.displayOrder,
       active: participants.active,
       version: participants.version,
     })
     .from(participants)
-    .where(eq(participants.id, id))
+    .leftJoin(selectionStages, eq(selectionStages.id, participants.currentStageId))
+    .where(and(eq(participants.id, id), eq(participants.editionId, currentEdition.id)))
     .limit(1);
 
   if (!participantRow) {
@@ -110,7 +103,7 @@ export default async function ParticipantDetailPage(props: Props) {
   const selectedCategory = categoryOptions.find((c) => c.id === participantRow.categoryId);
 
   // 3. Fetch related achievements, social links, and media
-  const [achievementsRows, socialLinksRows, mediaRows] = await Promise.all([
+  const [achievementsRows, socialLinksRows, mediaRows, titleRows] = await Promise.all([
     database
       .select({
         id: participantAchievements.id,
@@ -153,6 +146,15 @@ export default async function ParticipantDetailPage(props: Props) {
       .leftJoin(mediaAssets, eq(participantMedia.mediaId, mediaAssets.id))
       .where(eq(participantMedia.participantId, id))
       .orderBy(asc(participantMedia.displayOrder), asc(participantMedia.createdAt)),
+    database
+      .select({ id: editionTitles.id, name: editionTitles.name })
+      .from(participantTitleAssignments)
+      .innerJoin(editionTitles, eq(editionTitles.id, participantTitleAssignments.editionTitleId))
+      .where(and(
+        eq(participantTitleAssignments.participantId, id),
+        eq(editionTitles.editionId, currentEdition.id),
+      ))
+      .orderBy(asc(editionTitles.displayOrder), asc(editionTitles.name)),
   ]);
 
   // 4. Fetch joined portrait and QRIS assets
@@ -201,18 +203,20 @@ export default async function ParticipantDetailPage(props: Props) {
     number: participantRow.number,
     name: participantRow.name,
     slug: participantRow.slug,
-    stage: participantRow.stage,
+    currentStageId: participantRow.currentStageId,
+    currentStageName: participantRow.currentStageName,
+    selectionStatus: participantRow.selectionStatus,
     bio: participantRow.bio,
     portraitMediaId: participantRow.portraitMediaId,
     portraitAsset,
     qrisMediaId: participantRow.qrisMediaId,
     qrisAsset,
-    paymentUrl: participantRow.paymentUrl,
     displayOrder: participantRow.displayOrder,
     active: participantRow.active,
     version: participantRow.version,
     achievements: achievementsRows,
     socialLinks: socialLinksRows,
+    titles: titleRows,
     media: mediaRows.map((m) => ({
       id: m.id,
       role: m.role,
@@ -238,7 +242,7 @@ export default async function ParticipantDetailPage(props: Props) {
     <AdminPage
       eyebrow="Konten / peserta / editor"
       title={`Profil Peserta #${String(participantDetail.number).padStart(2, "0")}`}
-      description={`Kelola biodata, prestasi, media dokumentasi, dan QRIS untuk ${participantDetail.name}.`}
+      description="Kelola biodata, prestasi, media, dan QRIS peserta."
       action={<AdminBadge value={editionRow.lifecycle} />}
     >
       <ParticipantDetailWorkspace

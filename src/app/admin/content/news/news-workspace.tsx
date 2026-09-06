@@ -27,6 +27,7 @@ import {
   AdminMediaField,
   type MediaAssetSummary,
 } from "@/components/admin/media-picker";
+import { adminNativeScrollbarClassName } from "@/components/admin/admin-scroll-area";
 import { AdminBadge } from "@/components/admin/primitives";
 import { TipTapEditor } from "@/components/admin/tiptap-editor";
 import { TipTapRenderer } from "@/components/admin/tiptap-renderer";
@@ -68,6 +69,23 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+function legacyBodyToTipTapDocument(body: string | null | undefined): Record<string, unknown> | null {
+  if (!body || body.trim().length === 0) return null;
+  return {
+    type: "doc",
+    content: body.split(/\n{2,}/).map((paragraph) => ({
+      type: "paragraph",
+      content: [{ type: "text", text: paragraph }],
+    })),
+  };
+}
+
+function newsStatusLabel(status: string): string {
+  if (status === "published") return "Terbit";
+  if (status === "archived") return "Arsip";
+  return "Draft";
+}
+
 export type NewsRevisionItem = {
   id: string;
   version: number;
@@ -101,6 +119,7 @@ export type NewsWorkspaceProps = {
   activeEditionId: string;
   canPublish: boolean;
   canManage: boolean;
+  canEdit: boolean;
 };
 
 type AutosaveState = "saved" | "saving" | "unsaved" | "error";
@@ -112,6 +131,7 @@ export function NewsWorkspace({
   activeEditionId,
   canPublish,
   canManage,
+  canEdit,
 }: NewsWorkspaceProps) {
   const router = useRouter();
 
@@ -132,10 +152,10 @@ export function NewsWorkspace({
           try {
             return JSON.parse(initialArticle.bodyJson) as Record<string, unknown>;
           } catch {
-            return null;
+            return legacyBodyToTipTapDocument(initialArticle?.body);
           }
         })()
-      : null,
+      : legacyBodyToTipTapDocument(initialArticle?.body),
   );
 
   // View Layout Modes
@@ -162,23 +182,46 @@ export function NewsWorkspace({
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isFirstRender = useRef(true);
+  const articleIdRef = useRef(articleId);
+  const versionRef = useRef(version);
+  const dirtyRevisionRef = useRef(0);
+  const isDirtyRef = useRef(isDirty);
+
+  const markDirty = useCallback(() => {
+    dirtyRevisionRef.current += 1;
+    isDirtyRef.current = true;
+    setIsDirty(true);
+    setAutosaveState("unsaved");
+  }, []);
+
+  useEffect(() => {
+    articleIdRef.current = articleId;
+  }, [articleId]);
+
+  useEffect(() => {
+    versionRef.current = version;
+  }, [version]);
+
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
 
   // Track unsaved changes before leaving window
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
+      if (isDirtyRef.current) {
         e.preventDefault();
         e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
+  }, []);
 
   // Handle Title change -> auto-update slug if not manually customized
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
-    setIsDirty(true);
+    markDirty();
     if (!isSlugCustomized || slug.trim() === "") {
       setSlug(slugify(newTitle));
     }
@@ -187,17 +230,18 @@ export function NewsWorkspace({
   const handleSlugChange = (newSlug: string) => {
     setIsSlugCustomized(true);
     setSlug(slugify(newSlug));
-    setIsDirty(true);
+    markDirty();
   };
 
   // Save Draft logic
   const performSaveDraft = useCallback(
     async (isAutosave = false) => {
+      if (!canEdit) return null;
       if (!title.trim() || title.trim().length < 3) {
         if (!isAutosave) {
           toast.error("Judul minimal 3 karakter untuk disimpan");
         }
-        return false;
+        return null;
       }
 
       const activeSlug = slug.trim() || slugify(title);
@@ -205,28 +249,40 @@ export function NewsWorkspace({
         if (!isAutosave) {
           toast.error("Slug hanya boleh berisi huruf kecil, angka, dan minus (-)");
         }
-        return false;
+        return null;
       }
 
       setAutosaveState("saving");
+      const saveRevision = dirtyRevisionRef.current;
+      const saveArticleId = articleIdRef.current;
+      const saveVersion = versionRef.current;
 
       try {
         const bodyJsonString = bodyJson ? JSON.stringify(bodyJson) : null;
         const res = await saveNewsDraftAction({
-          id: articleId,
+          id: saveArticleId,
           title: title.trim(),
           slug: activeSlug,
           excerpt: excerpt.trim() || null,
           coverMediaId: coverMediaId || null,
           bodyJson: bodyJsonString,
-          baseVersion: version,
+          baseVersion: saveArticleId ? saveVersion : undefined,
         });
 
         if (res.success) {
+          articleIdRef.current = res.articleId;
+          versionRef.current = res.version;
           setArticleId(res.articleId);
           setVersion(res.version);
-          setIsDirty(false);
-          setAutosaveState("saved");
+          if (dirtyRevisionRef.current === saveRevision) {
+            isDirtyRef.current = false;
+            setIsDirty(false);
+            setAutosaveState("saved");
+          } else {
+            isDirtyRef.current = true;
+            setIsDirty(true);
+            setAutosaveState("unsaved");
+          }
           const now = new Date();
           const timeString = `${now.getHours().toString().padStart(2, "0")}:${now
             .getMinutes()
@@ -243,18 +299,22 @@ export function NewsWorkspace({
             window.history.replaceState(null, "", `/admin/content/news/${res.articleId}`);
           }
 
-          return true;
+          return res;
         }
       } catch (err: unknown) {
-        setAutosaveState("error");
+        if (dirtyRevisionRef.current === saveRevision) {
+          setAutosaveState("error");
+        } else {
+          setAutosaveState("unsaved");
+        }
         if (!isAutosave) {
           const msg = err instanceof Error ? err.message : "Gagal menyimpan draft berita";
           toast.error(msg);
         }
       }
-      return false;
+      return null;
     },
-    [articleId, bodyJson, coverMediaId, excerpt, slug, title, version],
+    [bodyJson, canEdit, coverMediaId, excerpt, slug, title],
   );
 
   // Debounce autosave 1.5s on content changes
@@ -281,11 +341,18 @@ export function NewsWorkspace({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [title, slug, excerpt, coverMediaId, bodyJson, isDirty, performSaveDraft]);
+  }, [title, slug, excerpt, coverMediaId, bodyJson, canEdit, isDirty, performSaveDraft]);
 
   // Publish Action
   const handlePublish = async () => {
-    if (!articleId) {
+    if (!canEdit || !canPublish) return;
+    if (autosaveState === "saving") {
+      toast.error("Tunggu hingga penyimpanan selesai sebelum menerbitkan");
+      return;
+    }
+
+    const currentArticleId = articleIdRef.current;
+    if (!currentArticleId) {
       toast.error("Simpan draft terlebih dahulu sebelum menerbitkan");
       return;
     }
@@ -314,18 +381,22 @@ export function NewsWorkspace({
     setIsSubmitting(true);
     try {
       // Ensure draft is saved first
-      await performSaveDraft(true);
+      const saved = await performSaveDraft(true);
+      if (!saved) return;
 
       const res = await publishNewsArticleAction({
-        id: articleId,
-        version,
+        id: saved.articleId,
+        version: saved.version,
       });
 
       if (res.success) {
         toast.success("Berita berhasil diterbitkan");
         setStatus("published");
-        setPublishedAt(new Date().toISOString());
-        setVersion((prev) => prev + 1);
+        setPublishedAt(res.publishedAt);
+        versionRef.current = res.version;
+        setVersion(res.version);
+        isDirtyRef.current = false;
+        setIsDirty(false);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal menerbitkan artikel";
@@ -337,17 +408,19 @@ export function NewsWorkspace({
 
   // Unpublish Action
   const handleUnpublish = async () => {
-    if (!articleId) return;
+    const currentArticleId = articleIdRef.current;
+    if (!currentArticleId) return;
     setIsSubmitting(true);
     try {
       const res = await unpublishNewsArticleAction({
-        id: articleId,
-        version,
+        id: currentArticleId,
+        version: versionRef.current,
       });
       if (res.success) {
         toast.success("Artikel ditarik kembali menjadi draft");
         setStatus("draft");
-        setVersion((prev) => prev + 1);
+        versionRef.current = res.version;
+        setVersion(res.version);
         setUnpublishDialogOpen(false);
       }
     } catch (err: unknown) {
@@ -360,17 +433,19 @@ export function NewsWorkspace({
 
   // Archive Action
   const handleArchive = async () => {
-    if (!articleId) return;
+    const currentArticleId = articleIdRef.current;
+    if (!currentArticleId) return;
     setIsSubmitting(true);
     try {
       const res = await archiveNewsArticleAction({
-        id: articleId,
-        version,
+        id: currentArticleId,
+        version: versionRef.current,
       });
       if (res.success) {
         toast.success("Artikel berhasil diarsipkan");
         setStatus("archived");
-        setVersion((prev) => prev + 1);
+        versionRef.current = res.version;
+        setVersion(res.version);
         setArchiveDialogOpen(false);
       }
     } catch (err: unknown) {
@@ -401,19 +476,27 @@ export function NewsWorkspace({
   // Restore revision
   const handleRestoreRevision = (rev: NewsRevisionItem) => {
     try {
-      const snapshot = JSON.parse(rev.snapshotJson);
-      if (snapshot.title) setTitle(snapshot.title);
-      if (snapshot.slug) setSlug(snapshot.slug);
-      if (snapshot.excerpt) setExcerpt(snapshot.excerpt);
-      if (snapshot.coverMediaId) setCoverMediaId(snapshot.coverMediaId);
-      if (snapshot.bodyJson) {
+      const snapshot = JSON.parse(rev.snapshotJson) as Record<string, unknown>;
+      if (typeof snapshot.title === "string") setTitle(snapshot.title);
+      if (typeof snapshot.slug === "string") setSlug(snapshot.slug);
+      if ("excerpt" in snapshot) {
+        setExcerpt(typeof snapshot.excerpt === "string" ? snapshot.excerpt : "");
+      }
+      if ("coverMediaId" in snapshot) {
+        const restoredCoverId = typeof snapshot.coverMediaId === "string" ? snapshot.coverMediaId : null;
+        setCoverMediaId(restoredCoverId);
+        if (!restoredCoverId) setCoverAsset(null);
+      }
+      if (typeof snapshot.bodyJson === "string" && snapshot.bodyJson.trim()) {
         try {
           setBodyJson(JSON.parse(snapshot.bodyJson));
         } catch {
           setBodyJson(null);
         }
+      } else if ("bodyJson" in snapshot) {
+        setBodyJson(null);
       }
-      setIsDirty(true);
+      markDirty();
       setConfirmRestoreOpen(false);
       setRevisionsOpen(false);
       toast.success(`Konten dari versi ${rev.version} berhasil dipulihkan ke editor`);
@@ -451,7 +534,7 @@ export function NewsWorkspace({
             <span className="font-montserrat text-sm font-bold text-dgb-900">
               {articleId ? "Edit Berita" : "Tulis Berita Baru"}
             </span>
-            <AdminBadge value={status} />
+            <AdminBadge value={newsStatusLabel(status)} />
             <span className="hidden rounded bg-dgb-50 px-2 py-0.5 text-[11px] font-semibold text-dgb-800 md:inline-block">
               {editionName}
             </span>
@@ -502,16 +585,18 @@ export function NewsWorkspace({
           )}
 
           {/* Save Draft Button */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => performSaveDraft(false)}
-            disabled={isSubmitting || autosaveState === "saving"}
-            className="h-8 gap-1.5 border-dgb-200 bg-white text-xs font-semibold text-dgb hover:bg-dgb-50"
-          >
-            <Save size={13} /> Simpan draft
-          </Button>
+          {canEdit && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void performSaveDraft(false)}
+              disabled={isSubmitting || autosaveState === "saving"}
+              className="h-8 gap-1.5 border-dgb-200 bg-white text-xs font-semibold text-dgb hover:bg-dgb-50"
+            >
+              <Save size={13} /> Simpan draft
+            </Button>
+          )}
 
           {/* Publish / Unpublish Buttons */}
           {status === "published" ? (
@@ -521,19 +606,19 @@ export function NewsWorkspace({
                 variant="outline"
                 size="sm"
                 onClick={() => setUnpublishDialogOpen(true)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || autosaveState === "saving"}
                 className="h-8 gap-1.5 border-amber-200 text-xs font-semibold text-amber-800 hover:bg-amber-50"
               >
                 <RotateCcw size={13} /> Tarik ke draft
               </Button>
             )
           ) : (
-            canPublish && (
+            canEdit && canPublish && (
               <Button
                 type="button"
                 size="sm"
                 onClick={handlePublish}
-                disabled={isSubmitting}
+                disabled={isSubmitting || autosaveState === "saving"}
                 className="h-8 gap-1.5 bg-dgb text-xs font-semibold text-white hover:bg-dgb-600"
               >
                 <Send size={13} /> Terbitkan
@@ -542,7 +627,7 @@ export function NewsWorkspace({
           )}
 
           {/* Archive / Delete Options */}
-          {articleId && (
+          {articleId && canEdit && (
             <>
               {status !== "archived" && (
                 <Button
@@ -580,11 +665,12 @@ export function NewsWorkspace({
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-xs font-semibold text-foreground">
-                Judul Berita <span className="text-destructive">*</span>
+                Judul berita <span className="text-destructive">*</span>
               </label>
               <Input
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
+                disabled={!canEdit}
                 placeholder="Tulis judul berita yang menarik..."
                 className="font-montserrat text-base font-semibold"
               />
@@ -593,7 +679,7 @@ export function NewsWorkspace({
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="text-xs font-semibold text-foreground">
-                  Slug URL <span className="text-destructive">*</span>
+                  Alamat berita <span className="text-destructive">*</span>
                 </label>
                 <span className="text-[11px] text-muted-foreground">
                   /berita/{slug || "judul-berita"}
@@ -603,6 +689,7 @@ export function NewsWorkspace({
                 <Input
                   value={slug}
                   onChange={(e) => handleSlugChange(e.target.value)}
+                  disabled={!canEdit}
                   placeholder="slug-artikel-berita"
                   className="font-mono text-xs"
                 />
@@ -613,8 +700,9 @@ export function NewsWorkspace({
                   onClick={() => {
                     setSlug(slugify(title));
                     setIsSlugCustomized(false);
-                    setIsDirty(true);
+                    markDirty();
                   }}
+                  disabled={!canEdit}
                   className="h-9 shrink-0 text-xs"
                   title="Sinkronkan kembali dari judul"
                 >
@@ -625,14 +713,15 @@ export function NewsWorkspace({
 
             <div>
               <label className="mb-1 block text-xs font-semibold text-foreground">
-                Ringkasan / Excerpt <span className="text-destructive">*</span>
+                Ringkasan <span className="text-destructive">*</span>
               </label>
               <Textarea
                 value={excerpt}
                 onChange={(e) => {
                   setExcerpt(e.target.value);
-                  setIsDirty(true);
+                  markDirty();
                 }}
+                disabled={!canEdit}
                 rows={3}
                 placeholder="Tulis ringkasan singkat berita (1-2 kalimat) untuk kartu dan cuplikan media sosial..."
                 className="text-xs leading-relaxed"
@@ -647,8 +736,8 @@ export function NewsWorkspace({
           <div>
             <AdminMediaField
               name="coverMediaId"
-              label="Foto Sampul Berita"
-              hint="Format gambar lanskap rasio 16:9 disarankan untuk tampilan optimal."
+              label="Foto sampul"
+              hint="Gunakan gambar lanskap 16:9."
               aspectRatioHint="16:9"
               value={coverMediaId}
               initialAsset={coverAsset}
@@ -656,10 +745,11 @@ export function NewsWorkspace({
               canManageMedia={canManage}
               activeEditionId={activeEditionId}
               required
+              className={cn(!canEdit && "pointer-events-none opacity-80")}
               onChange={(asset) => {
                 setCoverMediaId(asset?.id ?? null);
                 setCoverAsset(asset);
-                setIsDirty(true);
+                markDirty();
               }}
             />
           </div>
@@ -668,11 +758,17 @@ export function NewsWorkspace({
 
       {/* View Switcher Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-2">
-        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 p-1">
+        <div
+          role="tablist"
+          aria-label="Tampilan ruang kerja berita"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 p-1"
+        >
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            role="tab"
+            aria-selected={viewMode === "editor"}
             onClick={() => setViewMode("editor")}
             className={cn(
               "h-7 px-3 text-xs font-medium",
@@ -685,9 +781,11 @@ export function NewsWorkspace({
             type="button"
             variant="ghost"
             size="sm"
+            role="tab"
+            aria-selected={viewMode === "split"}
             onClick={() => setViewMode("split")}
             className={cn(
-              "h-7 px-3 text-xs font-medium",
+              "h-7 px-3 text-xs font-medium max-sm:hidden",
               viewMode === "split" && "bg-white font-semibold text-dgb shadow-xs",
             )}
           >
@@ -697,13 +795,15 @@ export function NewsWorkspace({
             type="button"
             variant="ghost"
             size="sm"
+            role="tab"
+            aria-selected={viewMode === "preview"}
             onClick={() => setViewMode("preview")}
             className={cn(
               "h-7 px-3 text-xs font-medium",
               viewMode === "preview" && "bg-white font-semibold text-dgb shadow-xs",
             )}
           >
-            <Eye size={13} className="mr-1.5" /> Preview
+            <Eye size={13} className="mr-1.5" /> Pratinjau
           </Button>
         </div>
 
@@ -742,21 +842,22 @@ export function NewsWorkspace({
       <div
         className={cn(
           "grid gap-6",
-          viewMode === "split" ? "xl:grid-cols-2" : "grid-cols-1",
+          viewMode === "split" ? "lg:grid-cols-2" : "grid-cols-1",
         )}
       >
         {/* Editor Area */}
         {(viewMode === "editor" || viewMode === "split") && (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-semibold text-foreground">Konten Artikel</span>
-              <span className="text-[11px] text-muted-foreground">WYSIWYG TipTap JSON</span>
+              <span className="text-xs font-semibold text-foreground">Isi berita</span>
+              <span className="text-[11px] text-muted-foreground">Isi terstruktur</span>
             </div>
             <TipTapEditor
               content={bodyJson}
+              editable={canEdit}
               onChange={(json) => {
                 setBodyJson(json);
-                setIsDirty(true);
+                markDirty();
               }}
               canManageMedia={canManage}
               activeEditionId={activeEditionId}
@@ -767,11 +868,11 @@ export function NewsWorkspace({
 
         {/* Live Preview Area */}
         {(viewMode === "preview" || viewMode === "split") && (
-          <div className="space-y-2">
+          <div className={cn("space-y-2", viewMode === "split" && "max-sm:hidden")}>
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-semibold text-foreground">Live Preview Publik</span>
+              <span className="text-xs font-semibold text-foreground">Pratinjau langsung</span>
               <span className="text-[11px] text-muted-foreground">
-                {previewDevice === "mobile" ? "Simulasi Layar 380px" : "Simulasi Desktop"}
+                {previewDevice === "mobile" ? "Layar 380 px" : "Desktop"}
               </span>
             </div>
 
@@ -779,7 +880,7 @@ export function NewsWorkspace({
               className={cn(
                 "mx-auto overflow-hidden rounded-xl border border-border bg-white shadow-xs",
                 previewDevice === "mobile"
-                  ? "w-full max-w-[380px] p-4 ring-8 ring-slate-100"
+                  ? "w-full max-w-[380px] p-4 ring-8 ring-dgb-50"
                   : "w-full p-6 md:p-8",
               )}
             >
@@ -942,7 +1043,7 @@ export function NewsWorkspace({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="max-h-[380px] space-y-2.5 overflow-y-auto pr-1">
+          <div className={cn("max-h-[380px] space-y-2.5 overflow-y-auto pr-1", adminNativeScrollbarClassName)}>
             {revisions.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted-foreground">
                 Belum ada data revisi tambahan.
