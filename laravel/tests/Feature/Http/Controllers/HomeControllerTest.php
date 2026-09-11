@@ -15,9 +15,12 @@ class HomeControllerTest extends TestCase
         $response->assertHeader('Vary', 'X-Inertia');
         $response->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Home')
-            ->where('migrationStage', 'Shell publik')
-            ->where('legacyApp', 'Next.js')
-            ->where('targetApp', 'Laravel + Inertia React')
+            ->where('meta.description', 'Official website Paguyuban Mojang Jajaka Kabupaten Garut.')
+            ->where('hero.title', 'Paguyuban Mojang Jajaka Kabupaten Garut')
+            ->where('hero.tagline', 'Nu Nyunda Tur Nyakola')
+            ->has('programs', 6)
+            ->has('news', 3)
+            ->where('join.href', 'https://linktr.ee/mokagarut')
         );
     }
 }

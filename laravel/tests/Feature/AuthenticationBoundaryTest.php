@@ -20,6 +20,11 @@ class AuthenticationBoundaryTest extends TestCase
 
     public function test_admin_guests_are_sent_to_the_google_login_page(): void
     {
+        config([
+            'services.google.client_id' => null,
+            'services.google.client_secret' => null,
+        ]);
+
         $this->get('/admin')->assertRedirect(route('admin.login'));
 
         $this->get(route('admin.login'))

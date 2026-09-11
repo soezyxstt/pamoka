@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\PublicCoreContent;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PublicPageController extends Controller
 {
-    public function about(): Response
+    public function about(PublicCoreContent $content): Response
     {
-        return $this->renderPlaceholder('about', 'Tentang PAMOKA Garut');
+        return Inertia::render('Public/About', $content->about());
     }
 
     public function event(string $event): Response

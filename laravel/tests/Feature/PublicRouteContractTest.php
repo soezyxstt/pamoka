@@ -10,7 +10,6 @@ class PublicRouteContractTest extends TestCase
     public function test_public_routes_render_the_placeholder_contract(): void
     {
         $routes = [
-            ['public.about', [], 'about', 'Tentang PAMOKA Garut'],
             ['public.events.show', ['event' => 'audisi'], 'events.show', 'Rangkaian kegiatan'],
             ['public.finalists.index', ['category' => 'mojang-rumaja'], 'finalists.index', 'Profil finalis'],
             ['public.finalists.show', ['category' => 'mojang-rumaja', 'name' => 'contoh-peserta'], 'finalists.show', 'Profil finalis'],
