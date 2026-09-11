@@ -1,10 +1,27 @@
 <?php
 
+use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AdminEditionContextController;
+use App\Http\Controllers\AdminRequestAccessController;
+use App\Http\Controllers\AdminUsersController;
+use App\Http\Controllers\Auth\GoogleAuthenticationController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PublicPageController;
+use App\Http\Middleware\EnsureAdminAccess;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
+
+Route::get('/admin/login', [GoogleAuthenticationController::class, 'showLogin'])->name('admin.login');
+Route::get('/auth/google/redirect', [GoogleAuthenticationController::class, 'redirectToGoogle'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [GoogleAuthenticationController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+Route::post('/logout', [GoogleAuthenticationController::class, 'logout'])->middleware('auth')->name('logout');
+Route::get('/admin/request-access', AdminRequestAccessController::class)->middleware('auth')->name('admin.request-access');
+Route::post('/admin/request-access', [AdminRequestAccessController::class, 'store'])->middleware('auth')->name('admin.request-access.store');
+Route::post('/admin/context/edition', [AdminEditionContextController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.edition-context.store');
+Route::get('/admin/users', [AdminUsersController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.users');
+Route::post('/admin/users/access-requests/{accessRequest}/approve', [AdminUsersController::class, 'approve'])->middleware(EnsureAdminAccess::class)->name('admin.access-requests.approve');
+Route::get('/admin', AdminDashboardController::class)->middleware(EnsureAdminAccess::class)->name('admin.dashboard');
 
 Route::get('/tentang', [PublicPageController::class, 'about'])->name('public.about');
 Route::get('/rangkaian-kegiatan/{event}', [PublicPageController::class, 'event'])->name('public.events.show');

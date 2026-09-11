@@ -28,7 +28,7 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 | **010** | Import 2025 content, run end-to-end QA, and perform a reversible cutover | `docs/runbooks/cms-cutover.md` | **IN PROGRESS (Not Authorized)** | Import massal dan cutover publik ditangguhkan hingga disetujui operator. |
 | **011** | Unify public and admin design, media navigation, and annual CMS context | `src/components/admin/*` | **DONE** | Penyelarasan token visual admin dengan public design tokens (Montserrat, `dgb`, `fb`). |
 | **012** | Admin CMS PAMOKA Berbasis Edisi | `plans/admin-page-overhaul.md` | **IN PROGRESS (Rework)** | Rework UX admin bertahap dengan checkpoint supervisor; fondasi visual dan navigasi sedang ditata ulang sebelum modul fungsional berikutnya. |
-| **013** | Migrasi total Next.js ke Laravel + Inertia React | [`013-route-domain-inventory.md`](013-route-domain-inventory.md) dan `laravel/` | **IN PROGRESS (Stage 4)** | Fondasi Laravel, inventaris route, shell publik, dan fondasi data inti MySQL selesai; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
+| **013** | Migrasi total Next.js ke Laravel + Inertia React | [`013-route-domain-inventory.md`](013-route-domain-inventory.md) dan `laravel/` | **IN PROGRESS (Stage 5)** | Fondasi Laravel, data inti MySQL, autentikasi admin, RBAC, approval akses, audit, dan konteks edisi aktif sudah tersedia sebagai sidecar; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
 
 ---
 
@@ -112,8 +112,10 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 - **Gate Stage 3**: 5 feature tests, 164 assertions, TypeScript, Vite production build, route list 10 route, HTTP smoke untuk 10 route, Inertia JSON response, 404 response, dan pemeriksaan visual desktop serta viewport sempit lulus.
 - **Stage 4**: Fondasi data inti MySQL untuk periode kepengurusan, edisi, kategori, tahap seleksi, dan peserta. Model Laravel memakai UUID, relasi Eloquent, enum kode kategori tetap `JD`, `MD`, `JR`, `MR`, migration factory, dan database test terpisah.
 - **Gate Stage 4**: 7 feature tests, 172 assertions, Pint, TypeScript, Vite production build, migration lokal ke database `pamoka`, serta pemeriksaan foreign key dan unique key pada tabel peserta lulus. Tidak ada migration operator atau cutover publik.
-- **Tahap berikutnya**: auth dan konteks edisi aktif, lalu pemindahan read slice publik berbasis data dengan parity checkpoint.
-- **Status**: IN PROGRESS. Stage 4 selesai pada fondasi data inti, belum menjadi runtime publik.
+- **Stage 5**: Session auth Laravel dengan adapter Google OAuth tanpa menyimpan kredensial di repository, akun baru berstatus `pending`, request access, role dan permission, override deny atau allow, audit log immutable, approval Role Administrator tanpa assignment `super_admin`, halaman auth admin, dan selector konteks edisi aktif.
+- **Gate Stage 5 foundation**: 20 feature tests, 263 assertions, Pint, TypeScript, Vite production build, migration dan seed lokal yang menghasilkan 23 permission serta 7 role tanpa user super-admin otomatis, HTTP smoke untuk login dan redirect guest, serta QA visual desktop dan viewport sempit pada login lulus. Handshake OAuth Google nyata belum dijalankan karena memerlukan kredensial operator.
+- **Tahap berikutnya**: public core berbasis data, dimulai dari home dan tentang, dengan parity visual, metadata, status response, serta fallback yang diuji.
+- **Status**: IN PROGRESS. Stage 5 foundation selesai; admin CMS penuh, OAuth nyata, dan runtime publik belum menjadi target aktif.
 
 ---
 

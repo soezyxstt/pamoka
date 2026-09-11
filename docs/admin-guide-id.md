@@ -2,6 +2,8 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku saat ini. Sidecar Laravel di `laravel/` baru memiliki fondasi Google OAuth, approval akses, RBAC, audit log, dan konteks edisi aktif; belum menggantikan seluruh workflow CMS atau runtime publik.
+
 ---
 
 ## 1. Masuk dan Manajemen Akses

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\ActiveEditionContext;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -35,9 +36,18 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        return [
+        $shared = [
             ...parent::share($request),
-            //
         ];
+
+        if ($request->user() !== null && ($request->is('admin') || $request->is('admin/*'))) {
+            $editionContext = app(ActiveEditionContext::class);
+            $shared['admin'] = [
+                'activeEdition' => $editionContext->resolve($request->cookie(ActiveEditionContext::COOKIE_NAME)),
+                'editions' => $editionContext->all(),
+            ];
+        }
+
+        return $shared;
     }
 }

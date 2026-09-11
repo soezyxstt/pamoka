@@ -11,5 +11,9 @@
 - **Kampanye voting**: periode voting yang terikat pada satu edisi, memiliki kelayakan peserta, tally, dan visibilitas hasil.
 - **Konten publik**: materi yang dilihat pengunjung dan harus mempertahankan parity selama migrasi.
 - **Ruang kerja admin**: permukaan terautentikasi untuk CMS, media, seleksi, organisasi, panitia, voting, dan audit.
+- **Akun admin**: identitas pengguna yang dapat meminta atau menerima akses ke ruang kerja admin.
+- **Permintaan akses**: pengajuan dari akun admin berstatus menunggu yang harus ditinjau sebelum area kerja dapat digunakan.
+- **Permission**: izin bernama untuk satu kemampuan admin, yang dapat berasal dari role atau override per pengguna.
+- **Konteks edisi aktif**: satu edisi yang sedang dipakai sebagai batas kerja untuk operasi admin yang terkait dengan tahun Pasanggiri.
 - **Route contract**: kesepakatan sementara tentang path, nama route, parameter, component Inertia, props, dan respons error selama pemindahan fitur.
 - **Shell publik**: layout bersama aplikasi target yang memuat navigasi, footer, typography, token brand, dan perilaku responsif pengunjung.
