@@ -15,7 +15,7 @@ class HomeControllerTest extends TestCase
         $response->assertHeader('Vary', 'X-Inertia');
         $response->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Home')
-            ->where('migrationStage', 'Fondasi')
+            ->where('migrationStage', 'Shell publik')
             ->where('legacyApp', 'Next.js')
             ->where('targetApp', 'Laravel + Inertia React')
         );

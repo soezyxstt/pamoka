@@ -5,6 +5,47 @@
 @source '../js/**/*.tsx';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-montserrat: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+    --font-inter: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+    --color-background: #f8f7f0;
+    --color-foreground: #173b33;
+    --color-dgb: #1f6357;
+    --color-dgb-50: #dbedea;
+    --color-dgb-100: #c4ddd7;
+    --color-dgb-300: #3e8678;
+    --color-dgb-500: #1b584d;
+    --color-dgb-600: #144239;
+    --color-dgb-700: #0d2c26;
+    --color-dgb-900: #030b09;
+    --color-fb: #e89928;
+    --color-fb-200: #f2c382;
+    --color-fb-300: #edad54;
+    --color-fb-400: #e89727;
+    --color-fb-500: #ce8623;
+}
+
+@layer base {
+    * {
+        @apply border-dgb-100;
+    }
+
+    html {
+        scroll-padding-top: 5rem;
+    }
+
+    body {
+        @apply bg-background font-inter text-foreground antialiased;
+        min-width: 320px;
+    }
+
+    ::selection {
+        @apply bg-fb-200 text-dgb-900;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--color-fb-400);
+        outline-offset: 3px;
+    }
 }

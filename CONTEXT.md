@@ -11,3 +11,5 @@
 - **Kampanye voting**: periode voting yang terikat pada satu edisi, memiliki kelayakan peserta, tally, dan visibilitas hasil.
 - **Konten publik**: materi yang dilihat pengunjung dan harus mempertahankan parity selama migrasi.
 - **Ruang kerja admin**: permukaan terautentikasi untuk CMS, media, seleksi, organisasi, panitia, voting, dan audit.
+- **Route contract**: kesepakatan sementara tentang path, nama route, parameter, component Inertia, props, dan respons error selama pemindahan fitur.
+- **Shell publik**: layout bersama aplikasi target yang memuat navigasi, footer, typography, token brand, dan perilaku responsif pengunjung.

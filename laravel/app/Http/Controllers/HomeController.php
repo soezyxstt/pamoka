@@ -10,7 +10,7 @@ class HomeController extends Controller
     public function __invoke(): Response
     {
         return Inertia::render('Home', [
-            'migrationStage' => 'Fondasi',
+            'migrationStage' => 'Shell publik',
             'legacyApp' => 'Next.js',
             'targetApp' => 'Laravel + Inertia React',
         ]);

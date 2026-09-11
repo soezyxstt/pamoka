@@ -28,7 +28,7 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 | **010** | Import 2025 content, run end-to-end QA, and perform a reversible cutover | `docs/runbooks/cms-cutover.md` | **IN PROGRESS (Not Authorized)** | Import massal dan cutover publik ditangguhkan hingga disetujui operator. |
 | **011** | Unify public and admin design, media navigation, and annual CMS context | `src/components/admin/*` | **DONE** | Penyelarasan token visual admin dengan public design tokens (Montserrat, `dgb`, `fb`). |
 | **012** | Admin CMS PAMOKA Berbasis Edisi | `plans/admin-page-overhaul.md` | **IN PROGRESS (Rework)** | Rework UX admin bertahap dengan checkpoint supervisor; fondasi visual dan navigasi sedang ditata ulang sebelum modul fungsional berikutnya. |
-| **013** | Migrasi total Next.js ke Laravel + Inertia React | [`013-route-domain-inventory.md`](013-route-domain-inventory.md) dan `laravel/` | **IN PROGRESS (Stage 2)** | Fondasi Laravel selesai. Inventaris route dan domain selesai; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
+| **013** | Migrasi total Next.js ke Laravel + Inertia React | [`013-route-domain-inventory.md`](013-route-domain-inventory.md) dan `laravel/` | **IN PROGRESS (Stage 3)** | Fondasi Laravel, inventaris route, shell publik, dan route contract selesai; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
 
 ---
 
@@ -108,8 +108,10 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 - **Gate Stage 1**: `php artisan test`, `npm run typecheck`, `npm run build`, route inspection, dan pemeriksaan HTTP lokal harus lulus sebelum migration slice berikutnya dimulai.
 - **Stage 2**: Inventaris 47 route page, 4 layout, 2 route handler API, 48 tabel, domain boundary, sumber kebenaran, urutan slice, dan stop conditions. Detail ada di [`013-route-domain-inventory.md`](013-route-domain-inventory.md).
 - **Gate Stage 2**: inventory dapat ditelusuri ke source route, schema, public readers, auth, media, dan legacy operations; tidak ada source Next.js atau database operator yang diubah.
-- **Tahap berikutnya**: shell visual publik dan route contract, lalu pemodelan database MySQL, auth, dan pemindahan fitur per bounded context dengan parity checkpoint.
-- **Status**: IN PROGRESS. Stage 2 selesai pada level inventory dan belum menjadi runtime publik.
+- **Stage 3**: Shell publik Inertia React, token brand target, navigasi desktop dan responsif, footer, home foundation, 9 route publik dinamis, placeholder contract, dan halaman 404 branded.
+- **Gate Stage 3**: 5 feature tests, 164 assertions, TypeScript, Vite production build, route list 10 route, HTTP smoke untuk 10 route, Inertia JSON response, 404 response, dan pemeriksaan visual desktop serta viewport sempit lulus.
+- **Tahap berikutnya**: pemodelan database MySQL, auth, dan pemindahan fitur per bounded context dengan parity checkpoint.
+- **Status**: IN PROGRESS. Stage 3 selesai pada shell dan route contract, belum menjadi runtime publik.
 
 ---
 
