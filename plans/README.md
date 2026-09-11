@@ -28,6 +28,7 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 | **010** | Import 2025 content, run end-to-end QA, and perform a reversible cutover | `docs/runbooks/cms-cutover.md` | **IN PROGRESS (Not Authorized)** | Import massal dan cutover publik ditangguhkan hingga disetujui operator. |
 | **011** | Unify public and admin design, media navigation, and annual CMS context | `src/components/admin/*` | **DONE** | Penyelarasan token visual admin dengan public design tokens (Montserrat, `dgb`, `fb`). |
 | **012** | Admin CMS PAMOKA Berbasis Edisi | `plans/admin-page-overhaul.md` | **IN PROGRESS (Rework)** | Rework UX admin bertahap dengan checkpoint supervisor; fondasi visual dan navigasi sedang ditata ulang sebelum modul fungsional berikutnya. |
+| **013** | Migrasi total Next.js ke Laravel + Inertia React | `laravel/` dan `CONTEXT.md` | **IN PROGRESS (Stage 1)** | Aplikasi Laravel dibangun berdampingan; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
 
 ---
 
@@ -98,6 +99,15 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
   10. Dedicated gallery workspace dengan dukungan album standalone maupun album acara.
   11. Dashboard indikator kesiapan (readiness overview) edisi aktif.
 - **Status**: IN PROGRESS (Rework supervisor-gated). Implementasi baseline tetap dipertahankan; checkpoint rework ditinjau bertahap sebelum modul berikutnya dikerjakan.
+
+### Plan 013: Migrasi total Next.js ke Laravel + Inertia React
+- **Tujuan**: Memindahkan aplikasi PAMOKA Garut ke Laravel dengan Inertia React melalui migration slice yang dapat diuji dan dibandingkan sebelum cutover.
+- **Boundary**: Direktori `laravel/` berjalan berdampingan dengan aplikasi Next.js pada root. Tidak ada penghapusan source lama, perubahan public route lama, migrasi database operator, atau cutover publik pada tahap ini.
+- **Stack target**: Laravel 13, Inertia Laravel, React, Vite, TypeScript, dan MySQL.
+- **Stage 1**: Fondasi aplikasi, root template Inertia, middleware, route home, entry React, serta feature test untuk kontrak halaman awal.
+- **Gate Stage 1**: `php artisan test`, `npm run typecheck`, `npm run build`, route inspection, dan pemeriksaan HTTP lokal harus lulus sebelum migration slice berikutnya dimulai.
+- **Tahap berikutnya**: inventory route dan domain, shell visual publik, pemodelan database MySQL, auth, lalu pemindahan fitur per bounded context dengan parity checkpoint.
+- **Status**: IN PROGRESS. Stage 1 sedang dikerjakan dan belum menjadi runtime publik.
 
 ---
 

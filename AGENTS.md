@@ -198,6 +198,7 @@ All uploads go through **UploadThing** only. There is no R2, S3, or local-blob w
 | 010 | Import 2025 content, run end-to-end QA, and perform a reversible cutover | IN PROGRESS (not authorized) |
 | 011 | Unify public and admin design, media navigation, and annual CMS context | DONE |
 | 012 | Admin CMS PAMOKA Berbasis Edisi | IN PROGRESS (rework) |
+| 013 | Migrasi total Next.js ke Laravel + Inertia React | IN PROGRESS (Stage 1) |
 
 ### Verified / working
 
@@ -216,11 +217,13 @@ All uploads go through **UploadThing** only. There is no R2, S3, or local-blob w
   * Operasional voting terisolasi per edisi dengan rekap tally harian merchant QRIS dan switch visibilitas hasil (`/admin/voting`).
   * Dashboard utama dengan panel checklist kesiapan edisi (8 indikator kesiapan) dan pintas navigasi cepat (`/admin`).
 - Public routes remain intact and live: `/`, `/tentang`, `/rangkaian-kegiatan`, `/voting`, `/profil-finalis`, `/voting/hasil`, `/monitor`.
+- Laravel target application is scaffolded under `laravel/` with an Inertia React home foundation. It runs beside the Next.js application; no public cutover has happened.
 - Baseline commit for the plans drift check: `3874ede`.
 
 ### Blockers
 
 - Plan 010 cutover (public runtime switch to live CMS data) is intentionally deferred until the operator authorizes it. Until then the hard-coded site stays live.
+- Plan 013 migration is staged and checkpointed. Stage 1 must pass Laravel feature tests, TypeScript, Vite production build, and local HTTP verification before any existing feature is ported.
 - Plan 012 rework berjalan bertahap dan dikendalikan supervisor; checkpoint 1, 1b, 2A, 2B.1, 2B.2A, 2B.2B, 2B.3, CP2B.4 source implementation, CP1C.1, CP1C.2, CP1C.3A, CP1C.3B, CP1C.4, CP3, CP4, CP5, CP6, source CP7, source CP8A, source CP8B, source CP8C, source CP9, source CP10, dan source CP11 diterima. CP8A menambahkan skema additive serta backfill idempotent. CP8B menangani pendaftar manual serta stage linear dinamis. CP8C mengunci detail peserta ke edisi aktif, menjadikan stage hanya-baca, memakai QRIS gambar eksternal, serta menambahkan gelar per edisi dengan capacity dan assignment multi-gelar hanya bagi peserta tahap final. CP9 memisahkan pengelolaan acara dan album, mengunci owner ke edisi aktif, serta mewajibkan tepat satu sumber per item galeri. CP10 memakai stage voting dinamis, snapshot saat mulai manual, QRIS gambar siap pakai, tally terisolasi per edisi, serta dashboard dengan 10 indikator kesiapan. CP11 menghapus caller legacy dan merangkum overview Konten tanpa menghapus data kompatibilitas. Migrasi `0013` dan `0014` serta backfill belum diterapkan ke database operator mana pun. Browser dataset nonempty, runtime upload, true FormData, viewport admin 380 px, autosave artikel nyata, QA detail periode kepengurusan berisi data, runtime visual CP7, runtime visual CP8B, runtime visual CP8C, runtime visual CP9, runtime visual CP10, dan runtime QA CP11 tetap OPEN.
 
 ---
