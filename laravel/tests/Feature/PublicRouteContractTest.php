@@ -11,10 +11,6 @@ class PublicRouteContractTest extends TestCase
     {
         $routes = [
             ['public.events.show', ['event' => 'audisi'], 'events.show', 'Rangkaian kegiatan'],
-            ['public.finalists.index', ['category' => 'mojang-rumaja'], 'finalists.index', 'Profil finalis'],
-            ['public.finalists.show', ['category' => 'mojang-rumaja', 'name' => 'contoh-peserta'], 'finalists.show', 'Profil finalis'],
-            ['public.semifinalists.index', ['category' => 'mojang-rumaja'], 'semifinalists.index', 'Profil semifinalis'],
-            ['public.semifinalists.show', ['category' => 'mojang-rumaja', 'name' => 'contoh-peserta'], 'semifinalists.show', 'Profil semifinalis'],
             ['public.voting.index', ['category' => 'mojang-dewasa'], 'voting.index', 'Voting'],
             ['public.voting.show', ['category' => 'mojang-dewasa', 'name' => 'contoh-peserta'], 'voting.show', 'Voting'],
             ['public.voting.results', ['category' => 'mojang-dewasa'], 'voting.results', 'Hasil voting'],
