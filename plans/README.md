@@ -118,8 +118,10 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 - **Gate Stage 6**: 22 feature tests, 289 assertions, Pint, TypeScript, Vite production build, HTTP smoke untuk home, tentang, PDF publik, dan 404, serta QA visual desktop dan viewport sempit lulus. Home dan tentang masih memakai snapshot konten hardcoded pembanding, tanpa CMS, database operator, atau cutover publik.
 - **Stage 7A**: Read model publik edisi aktif, kategori tetap `JD`, `MD`, `JR`, `MR`, daftar finalis dan semifinalis, detail profil peserta, filter peserta aktif, serta fallback data kosong. Source Next.js dan database operator tetap tidak disentuh.
 - **Gate Stage 7A**: 28 feature tests, 298 assertions, Pint, TypeScript, Vite production build, HTTP smoke untuk daftar finalis, daftar semifinalis, kategori invalid, dan asset hero, serta QA visual desktop dan viewport sempit lulus. Media peserta, prestasi, gelar, dan import data penuh belum menjadi bagian slice ini.
-- **Tahap berikutnya**: data tambahan profil peserta, media peserta, gelar per edisi, dan rehearsal import data sebelum route publik memakai dataset penuh.
-- **Status**: IN PROGRESS. Stage 7A selesai; Stage 7B menjadi target aktif berikutnya. Admin CMS penuh, handshake OAuth nyata, dan runtime publik belum menjadi target cutover.
+- **Stage 7B**: Fondasi additive untuk `media_assets`, `participant_media`, `participant_achievements`, `participant_social_links`, `edition_titles`, dan assignment gelar, beserta eager-loaded public read model. Hanya media asset berstatus `ready` dan gelar dari edisi yang sama yang dikirim ke Inertia.
+- **Gate Stage 7B**: 29 feature tests, 316 assertions, Pint, TypeScript, Vite production build, migration lokal `pamoka`, pemeriksaan enam tabel baru, dan test props profil publik lulus. Upload media, admin authoring, full data import, dan public cutover belum dilakukan.
+- **Tahap berikutnya**: rehearsal import data 2025 dengan pemetaan sumber hardcoded, validasi media dan gelar, lalu persiapan route acara dan berita.
+- **Status**: IN PROGRESS. Stage 7B selesai; Stage 7C menjadi target aktif berikutnya. Admin CMS penuh, handshake OAuth nyata, dan runtime publik belum menjadi target cutover.
 
 ---
 

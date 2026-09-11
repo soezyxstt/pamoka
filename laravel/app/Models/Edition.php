@@ -36,6 +36,11 @@ class Edition extends Model
         return $this->hasMany(Participant::class);
     }
 
+    public function titles(): HasMany
+    {
+        return $this->hasMany(EditionTitle::class);
+    }
+
     /**
      * @return array<string, string>
      */

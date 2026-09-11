@@ -6,6 +6,21 @@ type Participant = {
     slug: string
     bio: string | null
     image: string | null
+    imageAlt: string | null
+    achievements: string[]
+    socialLinks: SocialLink[]
+    titles: ParticipantTitle[]
+}
+
+type ParticipantTitle = {
+    name: string
+    description: string | null
+}
+
+type SocialLink = {
+    platform: string
+    label: string | null
+    url: string
 }
 
 type ParticipantsProps = {
@@ -108,7 +123,7 @@ export default function Index({
                                             <div className="relative aspect-square overflow-hidden bg-dgb-100">
                                                 <img
                                                     src={participant.image ?? fallbackImage}
-                                                    alt={participant.name}
+                                                    alt={participant.imageAlt ?? participant.name}
                                                     width="600"
                                                     height="600"
                                                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
@@ -124,7 +139,9 @@ export default function Index({
                                             </div>
                                             <div className="grid gap-2 p-5">
                                                 <h3 className="font-montserrat text-xl font-semibold text-dgb-900">{participant.name}</h3>
-                                                <p className="font-inter text-sm leading-6 text-dgb-600">{stage.name}</p>
+                                                <p className="font-inter text-sm leading-6 text-dgb-600">
+                                                    {participant.titles[0]?.name ?? stage.name}
+                                                </p>
                                             </div>
                                         </Link>
                                     )

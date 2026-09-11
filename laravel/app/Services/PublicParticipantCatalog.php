@@ -3,7 +3,12 @@
 namespace App\Services;
 
 use App\Enums\CategoryCode;
+use App\Enums\ParticipantMediaRole;
+use App\Enums\SocialPlatform;
 use App\Models\Edition;
+use App\Models\EditionTitle;
+use App\Models\Participant;
+use App\Models\ParticipantMedia;
 use App\Models\SelectionStage;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -65,6 +70,18 @@ final class PublicParticipantCatalog
             : $category->participants()
                 ->whereBelongsTo($edition)
                 ->where('active', true)
+                ->with([
+                    'achievements:id,participant_id,text,display_order',
+                    'socialLinks:id,participant_id,platform,label,url,display_order',
+                    'media' => fn ($query) => $query
+                        ->where('active', true)
+                        ->with('mediaAsset:id,url,alt,lifecycle'),
+                    'titles' => fn ($query) => $query
+                        ->where('edition_titles.edition_id', $edition->id)
+                        ->where('edition_titles.active', true)
+                        ->orderBy('edition_titles.display_order')
+                        ->orderBy('edition_titles.id'),
+                ])
                 ->where(function (Builder $query) use ($stage, $stageDefinition): void {
                     if ($stage !== null) {
                         $query
@@ -107,13 +124,7 @@ final class PublicParticipantCatalog
                 'slug' => $stage?->slug ?? $stageKey,
             ],
             'participants' => $participants
-                ->map(fn ($participant): array => [
-                    'number' => $participant->number,
-                    'name' => $participant->name,
-                    'slug' => $participant->slug,
-                    'bio' => $participant->bio,
-                    'image' => null,
-                ])
+                ->map(fn (Participant $participant): array => $this->participantPayload($participant, $edition))
                 ->values()
                 ->all(),
         ];
@@ -149,6 +160,47 @@ final class PublicParticipantCatalog
             ->orderByDesc('year')
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function participantPayload(Participant $participant, Edition $edition): array
+    {
+        $media = $participant->media
+            ->filter(fn (ParticipantMedia $item): bool => $item->mediaAsset !== null);
+        $preferredMedia = $media->first(
+            fn (ParticipantMedia $item): bool => $item->role === ParticipantMediaRole::Closeup,
+        ) ?? $media->first();
+
+        return [
+            'number' => $participant->number,
+            'name' => $participant->name,
+            'slug' => $participant->slug,
+            'bio' => $participant->bio,
+            'image' => $preferredMedia?->mediaAsset?->url,
+            'imageAlt' => $preferredMedia?->mediaAsset?->alt,
+            'achievements' => $participant->achievements
+                ->pluck('text')
+                ->values()
+                ->all(),
+            'socialLinks' => $participant->socialLinks
+                ->map(fn ($link): array => [
+                    'platform' => $link->platform instanceof SocialPlatform ? $link->platform->value : (string) $link->platform,
+                    'label' => $link->label,
+                    'url' => $link->url,
+                ])
+                ->values()
+                ->all(),
+            'titles' => $participant->titles
+                ->filter(fn (EditionTitle $title): bool => $title->edition_id === $edition->id && $title->active)
+                ->map(fn (EditionTitle $title): array => [
+                    'name' => $title->name,
+                    'description' => $title->description,
+                ])
+                ->values()
+                ->all(),
+        ];
     }
 
     /**

@@ -2,9 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ParticipantMediaRole;
+use App\Enums\SocialPlatform;
 use App\Models\Category;
 use App\Models\Edition;
+use App\Models\EditionTitle;
+use App\Models\MediaAsset;
 use App\Models\Participant;
+use App\Models\ParticipantAchievement;
+use App\Models\ParticipantMedia;
+use App\Models\ParticipantSocialLink;
 use App\Models\SelectionStage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
@@ -135,7 +142,7 @@ class PublicParticipantControllerTest extends TestCase
             'lifecycle' => 'active',
             'final_stage' => true,
         ]);
-        Participant::factory()->for($edition)->for($category)->for($stage, 'currentStage')->create([
+        $participant = Participant::factory()->for($edition)->for($category)->for($stage, 'currentStage')->create([
             'stage' => 'final',
             'selection_status' => 'completed',
             'number' => 7,
@@ -143,6 +150,31 @@ class PublicParticipantControllerTest extends TestCase
             'slug' => 'contoh-finalis',
             'bio' => 'Profil singkat peserta untuk pengujian.',
         ]);
+        $title = EditionTitle::factory()->for($edition)->create([
+            'name' => 'Jajaka Pinilih',
+            'description' => 'Gelar utama edisi 2025.',
+        ]);
+        $otherTitle = EditionTitle::factory()->for(Edition::factory()->create())->create([
+            'name' => 'Gelar Edisi Lain',
+        ]);
+        $asset = MediaAsset::factory()->create([
+            'url' => '/participants/contoh-finalis.webp',
+            'alt' => 'Foto Contoh Finalis',
+            'lifecycle' => 'ready',
+        ]);
+        ParticipantAchievement::factory()->for($participant)->create([
+            'text' => 'Juara pidato tingkat kabupaten.',
+        ]);
+        ParticipantSocialLink::factory()->for($participant)->create([
+            'platform' => SocialPlatform::Instagram,
+            'label' => '@contohfinalis',
+            'url' => 'https://instagram.com/contohfinalis',
+        ]);
+        ParticipantMedia::factory()->for($participant)->for($asset, 'mediaAsset')->create([
+            'role' => ParticipantMediaRole::Closeup,
+        ]);
+        $participant->titles()->attach($title, ['assigned_at' => now()]);
+        $participant->titles()->attach($otherTitle, ['assigned_at' => now()]);
 
         $response = $this->get(route('public.finalists.show', [
             'category' => 'jajaka-dewasa',
@@ -157,6 +189,12 @@ class PublicParticipantControllerTest extends TestCase
             ->where('participant.name', 'Contoh Finalis')
             ->where('participant.number', 7)
             ->where('participant.bio', 'Profil singkat peserta untuk pengujian.')
+            ->where('participant.image', '/participants/contoh-finalis.webp')
+            ->where('participant.imageAlt', 'Foto Contoh Finalis')
+            ->where('participant.achievements.0', 'Juara pidato tingkat kabupaten.')
+            ->where('participant.socialLinks.0.label', '@contohfinalis')
+            ->has('participant.titles', 1)
+            ->where('participant.titles.0.name', 'Jajaka Pinilih')
         );
     }
 

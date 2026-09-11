@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Models;
+
+use Database\Factories\MediaAssetFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+#[Fillable(['provider', 'provider_key', 'url', 'filename', 'mime_type', 'bytes', 'alt', 'decorative', 'lifecycle', 'owner_user_id'])]
+class MediaAsset extends Model
+{
+    /** @use HasFactory<MediaAssetFactory> */
+    use HasFactory, HasUuids;
+
+    public function participantMedia(): HasMany
+    {
+        return $this->hasMany(ParticipantMedia::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'bytes' => 'integer',
+            'decorative' => 'boolean',
+        ];
+    }
+}
