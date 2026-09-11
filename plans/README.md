@@ -28,7 +28,7 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 | **010** | Import 2025 content, run end-to-end QA, and perform a reversible cutover | `docs/runbooks/cms-cutover.md` | **IN PROGRESS (Not Authorized)** | Import massal dan cutover publik ditangguhkan hingga disetujui operator. |
 | **011** | Unify public and admin design, media navigation, and annual CMS context | `src/components/admin/*` | **DONE** | Penyelarasan token visual admin dengan public design tokens (Montserrat, `dgb`, `fb`). |
 | **012** | Admin CMS PAMOKA Berbasis Edisi | `plans/admin-page-overhaul.md` | **IN PROGRESS (Rework)** | Rework UX admin bertahap dengan checkpoint supervisor; fondasi visual dan navigasi sedang ditata ulang sebelum modul fungsional berikutnya. |
-| **013** | Migrasi total Next.js ke Laravel + Inertia React | [`013-route-domain-inventory.md`](013-route-domain-inventory.md) dan `laravel/` | **IN PROGRESS (Stage 3)** | Fondasi Laravel, inventaris route, shell publik, dan route contract selesai; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
+| **013** | Migrasi total Next.js ke Laravel + Inertia React | [`013-route-domain-inventory.md`](013-route-domain-inventory.md) dan `laravel/` | **IN PROGRESS (Stage 4)** | Fondasi Laravel, inventaris route, shell publik, dan fondasi data inti MySQL selesai; Next.js lama tetap tidak diubah sebagai sumber pembanding sampai setiap checkpoint lolos. |
 
 ---
 
@@ -110,8 +110,10 @@ Dokumen ini adalah sumber otoritatif untuk status rencana kerja (plans), arsitek
 - **Gate Stage 2**: inventory dapat ditelusuri ke source route, schema, public readers, auth, media, dan legacy operations; tidak ada source Next.js atau database operator yang diubah.
 - **Stage 3**: Shell publik Inertia React, token brand target, navigasi desktop dan responsif, footer, home foundation, 9 route publik dinamis, placeholder contract, dan halaman 404 branded.
 - **Gate Stage 3**: 5 feature tests, 164 assertions, TypeScript, Vite production build, route list 10 route, HTTP smoke untuk 10 route, Inertia JSON response, 404 response, dan pemeriksaan visual desktop serta viewport sempit lulus.
-- **Tahap berikutnya**: pemodelan database MySQL, auth, dan pemindahan fitur per bounded context dengan parity checkpoint.
-- **Status**: IN PROGRESS. Stage 3 selesai pada shell dan route contract, belum menjadi runtime publik.
+- **Stage 4**: Fondasi data inti MySQL untuk periode kepengurusan, edisi, kategori, tahap seleksi, dan peserta. Model Laravel memakai UUID, relasi Eloquent, enum kode kategori tetap `JD`, `MD`, `JR`, `MR`, migration factory, dan database test terpisah.
+- **Gate Stage 4**: 7 feature tests, 172 assertions, Pint, TypeScript, Vite production build, migration lokal ke database `pamoka`, serta pemeriksaan foreign key dan unique key pada tabel peserta lulus. Tidak ada migration operator atau cutover publik.
+- **Tahap berikutnya**: auth dan konteks edisi aktif, lalu pemindahan read slice publik berbasis data dengan parity checkpoint.
+- **Status**: IN PROGRESS. Stage 4 selesai pada fondasi data inti, belum menjadi runtime publik.
 
 ---
 
