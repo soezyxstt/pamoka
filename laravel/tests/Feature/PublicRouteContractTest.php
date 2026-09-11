@@ -7,10 +7,9 @@ use Tests\TestCase;
 
 class PublicRouteContractTest extends TestCase
 {
-    public function test_public_routes_render_the_placeholder_contract(): void
+    public function test_remaining_public_routes_render_the_placeholder_contract(): void
     {
         $routes = [
-            ['public.events.show', ['event' => 'audisi'], 'events.show', 'Rangkaian kegiatan'],
             ['public.voting.index', ['category' => 'mojang-dewasa'], 'voting.index', 'Voting'],
             ['public.voting.show', ['category' => 'mojang-dewasa', 'name' => 'contoh-peserta'], 'voting.show', 'Voting'],
             ['public.voting.results', ['category' => 'mojang-dewasa'], 'voting.results', 'Hasil voting'],

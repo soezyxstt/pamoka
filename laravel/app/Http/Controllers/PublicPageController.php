@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\PublicCoreContent;
+use App\Services\PublicEventCatalog;
 use App\Services\PublicParticipantCatalog;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -14,9 +15,13 @@ class PublicPageController extends Controller
         return Inertia::render('Public/About', $content->about());
     }
 
-    public function event(string $event): Response
+    public function event(string $event, PublicEventCatalog $catalog): Response
     {
-        return $this->renderPlaceholder('events.show', 'Rangkaian kegiatan', ['event' => $event]);
+        $data = $catalog->detail($event);
+
+        abort_if($data === null, 404, 'Kegiatan tidak ditemukan.');
+
+        return Inertia::render('Public/Events/Show', $data);
     }
 
     public function finalists(string $category, PublicParticipantCatalog $catalog): Response
