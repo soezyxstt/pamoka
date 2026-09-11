@@ -20,6 +20,11 @@ class MediaAsset extends Model
         return $this->hasMany(ParticipantMedia::class);
     }
 
+    public function newsArticles(): HasMany
+    {
+        return $this->hasMany(NewsArticle::class, 'cover_media_id');
+    }
+
     protected function casts(): array
     {
         return [

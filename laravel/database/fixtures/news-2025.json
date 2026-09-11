@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "edition": {
+    "year": 2025,
+    "slug": "2025",
+    "name": "Pasanggiri Mojang Jajaka Garut 2025",
+    "timezone": "Asia/Jakarta",
+    "lifecycle": "active"
+  },
+  "articles": [
+    {
+      "slug": "press-release-semifinalis",
+      "title": "Press Release Semifinalis Pasanggiri Mojang Jajaka Kabupaten Garut 2025",
+      "excerpt": "Paguyuban Mojang Jajaka Kabupaten Garut berkolaborasi dengan Dinas Pariwisata dan Kebudayaan Kabupaten Garut dalam Audisi Pasanggiri Mojang Jajaka Kabupaten Garut 2025.",
+      "body": null,
+      "bodyJson": null,
+      "kind": "file",
+      "sourceUrl": "/berita/press-release-semifinalis.pdf",
+      "cover": {
+        "url": "/berita/press-release-semifinalis.webp",
+        "alt": "Press release semifinalis Pasanggiri Mojang Jajaka Kabupaten Garut 2025"
+      },
+      "publishedAt": "2025-06-22T00:00:00+07:00",
+      "status": "published"
+    },
+    {
+      "slug": "pasanggiri-mojang-jajaka-garut-2025",
+      "title": "Pasanggiri Mojang Jajaka Garut 2025",
+      "excerpt": "Informasi dan perkembangan terbaru dari rangkaian Pasanggiri Mojang Jajaka Kabupaten Garut.",
+      "body": null,
+      "bodyJson": null,
+      "kind": "external",
+      "sourceUrl": "https://www.garuters.id/2025/07/pasanggiri-mojang-jajaka-kabupaten-garut-2025.html",
+      "cover": {
+        "url": "/bagendit.jpg",
+        "alt": "Dokumentasi PAMOKA Garut"
+      },
+      "publishedAt": "2025-06-01T00:00:00+07:00",
+      "status": "published"
+    },
+    {
+      "slug": "mojang-jajaka-garut-promosi-budaya",
+      "title": "Mojang Jajaka Garut dan Promosi Budaya",
+      "excerpt": "Mengenal peran generasi muda dalam menjaga budaya Sunda, pariwisata, dan ekonomi kreatif Kabupaten Garut.",
+      "body": null,
+      "bodyJson": null,
+      "kind": "external",
+      "sourceUrl": "https://kabarpriangan.pikiran-rakyat.com/kabar-priangan/pr-1487466608/pasanggiri-mojang-dan-jajaka-garut-dorong-promosi-budaya-dan-parawisata",
+      "cover": {
+        "url": "/programs.jpg",
+        "alt": "Program PAMOKA Garut"
+      },
+      "publishedAt": "2024-01-01T00:00:00+07:00",
+      "status": "published"
+    }
+  ],
+  "notes": [
+    "Snapshot ini berasal dari tiga kartu berita stabil yang sudah dipakai pada target Laravel.",
+    "Tautan eksternal dipertahankan sebagai sourceUrl dan tidak diambil ulang saat request publik.",
+    "Isi artikel belum diimpor karena source stabil hanya menyediakan ringkasan dan tautan sumber."
+  ]
+}

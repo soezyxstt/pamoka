@@ -5,9 +5,6 @@ namespace App\Services;
 final class PublicCoreContent
 {
     /**
-     * @return array<string, mixed>
-     */
-    /**
      * @param  list<array{title: string, description: string, image: string, date: string, href: string}>  $news
      * @return array<string, mixed>
      */
