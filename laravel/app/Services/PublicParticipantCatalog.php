@@ -85,7 +85,8 @@ final class PublicParticipantCatalog
                 ->where(function (Builder $query) use ($stage, $stageDefinition): void {
                     if ($stage !== null) {
                         $query
-                            ->where('current_stage_id', $stage->id)
+                            ->whereHas('stageEntries', fn ($stageQuery) => $stageQuery->where('stage_id', $stage->id))
+                            ->orWhere('current_stage_id', $stage->id)
                             ->orWhere(function (Builder $legacyQuery) use ($stageDefinition): void {
                                 $legacyQuery
                                     ->whereNull('current_stage_id')

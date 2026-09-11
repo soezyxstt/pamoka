@@ -47,6 +47,11 @@ class Participant extends Model
         return $this->hasMany(ParticipantMedia::class)->orderBy('display_order')->orderBy('id');
     }
 
+    public function stageEntries(): HasMany
+    {
+        return $this->hasMany(ParticipantStageEntry::class);
+    }
+
     public function titles(): BelongsToMany
     {
         return $this->belongsToMany(EditionTitle::class, 'participant_title_assignments')
