@@ -32,13 +32,14 @@ $env:DB_DATABASE = 'pamoka_test'
 & 'D:\Tools\php-8.5.10\php.exe' artisan moka:rehearse-2025 --apply
 ```
 
-Command `--apply` memvalidasi semua fixture terlebih dahulu, kemudian menjalankan import peserta, berita, media publik, organisasi, dan voting dalam satu transaksi. Jika salah satu import gagal, perubahan rehearsal dibatalkan.
+Command `--apply` memvalidasi semua fixture terlebih dahulu, kemudian menjalankan import peserta, berita, media publik, organisasi, voting, dan page section dalam satu transaksi. Jika salah satu import gagal, perubahan rehearsal dibatalkan.
 
 Hasil minimum yang diharapkan:
 
 - 1 edisi, 4 kategori, 2 tahap seleksi, dan 60 peserta.
 - 3 artikel, 6 acara, 7 album, 69 item album, dan 68 sponsor.
 - 19 profil organisasi, 21 penugasan organisasi.
+- 1 page section publik `tentang.misi`.
 - 1 campaign, 44 peserta snapshot, dan 572 baris tally.
 
 Jalankan `moka:rehearse-2025 --apply` untuk kedua kalinya. Jumlah record harus tetap sama.

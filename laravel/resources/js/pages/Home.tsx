@@ -8,6 +8,13 @@ type NewsItem = {
     href: string
 }
 
+type SiteAsset = {
+    url: string
+    alt: string | null
+    focalX: number | null
+    focalY: number | null
+}
+
 type HomeProps = {
     meta: {
         title: string
@@ -31,10 +38,13 @@ type HomeProps = {
         label: string
         image: string
     }
+    assets: Record<string, SiteAsset>
     emptyState: string
 }
 
-export default function Home({ meta, hero, programImages, programs, news, join, emptyState }: HomeProps) {
+export default function Home({ meta, hero, programImages, programs, news, join, assets, emptyState }: HomeProps) {
+    const assetUrl = (slotKey: string, fallback: string) => assets[slotKey]?.url ?? fallback
+
     return (
         <>
             <Head title={meta.title}>
@@ -73,7 +83,7 @@ export default function Home({ meta, hero, programImages, programs, news, join, 
                 <section
                     id="program"
                     className="relative overflow-hidden bg-cover bg-center px-5 py-16 sm:px-8 md:px-20 md:py-24"
-                    style={{ backgroundImage: 'url("/programs.jpg")' }}
+                    style={{ backgroundImage: `url("${assetUrl('home.programs.bg', '/programs.jpg')}")` }}
                 >
                     <div className="absolute inset-0 bg-dgb-50/90" />
                     <div className="relative mx-auto grid max-w-7xl items-center gap-12 md:grid-cols-[0.9fr_1.1fr] md:gap-20">
@@ -109,7 +119,7 @@ export default function Home({ meta, hero, programImages, programs, news, join, 
                 <section
                     id="berita"
                     className="relative overflow-hidden bg-cover bg-center px-5 py-16 sm:px-8 md:px-24 md:py-24"
-                    style={{ backgroundImage: 'url("/bagendit.webp")' }}
+                    style={{ backgroundImage: `url("${assetUrl('home.news.bg', '/bagendit.webp')}")` }}
                 >
                     <div className="absolute inset-0 bg-fb-50/90" />
                     <div className="relative mx-auto max-w-7xl">
@@ -167,7 +177,7 @@ export default function Home({ meta, hero, programImages, programs, news, join, 
 
                 <section
                     className="relative overflow-hidden bg-cover bg-center px-5 py-16 sm:px-8 md:px-20 md:py-24"
-                    style={{ backgroundImage: 'url("/gf-1.webp")' }}
+                    style={{ backgroundImage: `url("${assetUrl('home.cta.bg', '/gf-1.webp')}")` }}
                 >
                     <div className="absolute inset-0 bg-fb-50/88" />
                     <div className="relative mx-auto grid max-w-7xl items-center gap-12 md:grid-cols-[0.9fr_1.1fr] md:gap-20">

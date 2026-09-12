@@ -9,7 +9,9 @@ use App\Services\PublicEventCatalog;
 use App\Services\PublicGalleryCatalog;
 use App\Services\PublicNewsCatalog;
 use App\Services\PublicOrganizationCatalog;
+use App\Services\PublicPageSectionCatalog;
 use App\Services\PublicParticipantCatalog;
+use App\Services\PublicSiteAssetCatalog;
 use App\Services\PublicSponsorCatalog;
 use App\Services\PublicVotingCatalog;
 use Illuminate\Http\RedirectResponse;
@@ -23,10 +25,16 @@ class PublicPageController extends Controller
         PublicCoreContent $content,
         PublicGalleryCatalog $gallery,
         PublicOrganizationCatalog $organization,
+        PublicPageSectionCatalog $pageSections,
+        PublicSiteAssetCatalog $siteAssets,
     ): Response {
+        $aboutSections = $pageSections->about();
+
         return Inertia::render('Public/About', $content->about(
-            $gallery->aboutVideos(),
+            $aboutSections['videos'] !== [] ? $aboutSections['videos'] : $gallery->aboutVideos(),
             $organization->about(),
+            $siteAssets->forActiveEdition(),
+            $aboutSections['missions'],
         ));
     }
 

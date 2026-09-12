@@ -22,6 +22,7 @@ class Rehearse2025 extends Command
         'moka:import-public-media' => 'public-media-2025.json',
         'moka:import-public-organization' => 'organization-public-snapshot.json',
         'moka:import-voting' => 'voting-2025.json',
+        'moka:import-page-sections' => 'page-sections-2025.json',
     ];
 
     public function handle(): int

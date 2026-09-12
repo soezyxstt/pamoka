@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "edition": {
+    "year": 2025,
+    "slug": "2025"
+  },
+  "sections": [
+    {
+      "pageKey": "tentang",
+      "sectionKey": "misi",
+      "title": "Misi",
+      "eyebrow": null,
+      "body": "Membangun hubungan silih asah, silih asih, silih asuh di lingkungan Paguyuban Mojang Jajaka.\nMenjadi wadah pembinaan dan pengembangan potensi generasi muda Kabupaten Garut dalam bidang kepribadian, kepemimpinan, dan kemampuan komunikasi publik.\nMelestarikan dan membangun nilai budaya sebagai jati diri pemuda Sunda yang kreatif dan inspiratif.\nMembangun jejaring dengan berbagai pemangku kepentingan di tingkat daerah, provinsi, dan nasional untuk memperluas peran Paguyuban dalam promosi pariwisata, budaya, dan ekonomi kreatif Kabupaten Garut.\nMendorong anggota untuk berpikir global dan bertindak lokal, dengan mengedepankan nilai kasundaan yang adaptif terhadap tantangan zaman.",
+      "presentation": {
+        "items": [
+          "Membangun hubungan silih asah, silih asih, silih asuh di lingkungan Paguyuban Mojang Jajaka.",
+          "Menjadi wadah pembinaan dan pengembangan potensi generasi muda Kabupaten Garut dalam bidang kepribadian, kepemimpinan, dan kemampuan komunikasi publik.",
+          "Melestarikan dan membangun nilai budaya sebagai jati diri pemuda Sunda yang kreatif dan inspiratif.",
+          "Membangun jejaring dengan berbagai pemangku kepentingan di tingkat daerah, provinsi, dan nasional untuk memperluas peran Paguyuban dalam promosi pariwisata, budaya, dan ekonomi kreatif Kabupaten Garut.",
+          "Mendorong anggota untuk berpikir global dan bertindak lokal, dengan mengedepankan nilai kasundaan yang adaptif terhadap tantangan zaman."
+        ]
+      },
+      "status": "published"
+    }
+  ]
+}

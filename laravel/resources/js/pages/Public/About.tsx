@@ -12,6 +12,13 @@ type Video = {
     title: string
 }
 
+type SiteAsset = {
+    url: string
+    alt: string | null
+    focalX: number | null
+    focalY: number | null
+}
+
 type AboutProps = {
     meta: {
         title: string
@@ -35,10 +42,13 @@ type AboutProps = {
     leadership: Person[]
     pastLeaders: Person[]
     videos: Video[]
+    assets: Record<string, SiteAsset>
     emptyState: string
 }
 
-export default function About({ meta, hero, vision, missions, legal, leadership, pastLeaders, videos, emptyState }: AboutProps) {
+export default function About({ meta, hero, vision, missions, legal, leadership, pastLeaders, videos, assets, emptyState }: AboutProps) {
+    const assetUrl = (slotKey: string, fallback: string) => assets[slotKey]?.url ?? fallback
+
     return (
         <>
             <Head title={meta.title}>
@@ -57,11 +67,11 @@ export default function About({ meta, hero, vision, missions, legal, leadership,
                 <section
                     id="visi-misi"
                     className="relative overflow-hidden bg-cover bg-center px-5 pb-16 sm:px-8 md:pb-24"
-                    style={{ backgroundImage: 'url("/gf-1.webp")' }}
+                    style={{ backgroundImage: `url("${assetUrl('about.vision.bg', '/gf-1.webp')}")` }}
                 >
                     <div className="relative mx-auto -mt-12 max-w-5xl md:-mt-20">
                         <img
-                            src="/gf-about.webp"
+                            src={assetUrl('about.intro.image', '/gf-about.webp')}
                             alt="Kebersamaan keluarga PAMOKA Garut"
                             width="1080"
                             height="720"
@@ -140,7 +150,7 @@ export default function About({ meta, hero, vision, missions, legal, leadership,
                 <section
                     id="gallery"
                     className="relative overflow-hidden bg-cover bg-center px-5 py-16 sm:px-8 md:px-24 md:py-24"
-                    style={{ backgroundImage: 'url("/bagendit.jpg")' }}
+                    style={{ backgroundImage: `url("${assetUrl('about.gallery.bg', '/bagendit.jpg')}")` }}
                 >
                     <div className="absolute inset-0 bg-dgb-50/90" />
                     <div className="relative mx-auto max-w-6xl">

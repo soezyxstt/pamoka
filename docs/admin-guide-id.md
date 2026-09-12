@@ -66,6 +66,8 @@ Menu **Aset Situs Tetap** (`/admin/content/site-assets`) mengelola penempatan me
 5. Tombol **Lepas media** mengosongkan slot terpilih tanpa menghapus file asli dari pustaka media.
 6. Tidak tersedia tombol penambahan slot sembarangan guna menjaga integritas desain situs publik.
 
+Setelah binding disimpan, public Laravel hanya membaca media berstatus `ready` yang cocok dengan tipe slot dan edisi aktif. Jika slot belum terisi atau medianya tidak valid, halaman memakai fallback asset lokal. Binding tidak langsung mengganti public Next.js yang masih menjadi sumber pembanding.
+
 ---
 
 ## 6. Sponsor & Mitra
@@ -193,9 +195,9 @@ Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake 
 
 ## 14. Rehearsal Migrasi Laravel 2025
 
-Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture peserta, berita, media publik, organisasi, dan voting sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
+Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture peserta, berita, media publik, organisasi, voting, dan page section sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
 
-Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B dan studio autosave atau preview atau restore pada Stage 10C sudah tersedia sebagai fitur sidecar, tetapi belum menjadi public cutover.
+Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B, studio autosave atau preview atau restore pada Stage 10C, serta reader page section dan binding aset publik pada Stage 10D sudah tersedia sebagai fitur sidecar, tetapi belum menjadi public cutover.
 
 ---
 

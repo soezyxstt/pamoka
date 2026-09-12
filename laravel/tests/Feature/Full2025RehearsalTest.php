@@ -44,6 +44,7 @@ class Full2025RehearsalTest extends TestCase
         $this->assertDatabaseCount('participant_stage_entries', 104);
         $this->assertDatabaseCount('participant_achievements', 164);
         $this->assertDatabaseCount('news_articles', 3);
+        $this->assertDatabaseCount('page_sections', 1);
         $this->assertDatabaseCount('events', 6);
         $this->assertDatabaseCount('gallery_items', 69);
         $this->assertDatabaseCount('sponsors', 68);
@@ -69,6 +70,7 @@ class Full2025RehearsalTest extends TestCase
         $this->assertDatabaseCount('editions', 1);
         $this->assertDatabaseCount('participants', 60);
         $this->assertDatabaseCount('news_articles', 3);
+        $this->assertDatabaseCount('page_sections', 1);
         $this->assertDatabaseCount('events', 6);
         $this->assertDatabaseCount('gallery_items', 69);
         $this->assertDatabaseCount('sponsors', 68);
