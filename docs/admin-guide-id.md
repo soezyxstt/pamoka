@@ -133,6 +133,8 @@ Menu **Mojang Jajaka** (`/admin/content/participants`) mengelola peserta Pasangg
    - **QRIS dan Voting**: QRIS dibuat di luar sistem, lalu gambarnya diunggah atau dipilih dari Pustaka Media.
 10. **Live Preview**: Pratinjau kartu peserta secara langsung saat mengedit.
 
+Pada sidecar Laravel, Stage 9C sudah menyediakan daftar peserta, input pendaftar baru, editor identitas, prestasi, tautan sosial, foto profil multi-role, QRIS, URL pembayaran, status aktif, dan penghapusan aman pada route `/admin/content/participants`. Perubahan hanya berlaku untuk edisi yang dipilih, memakai optimistic version, permission `participants.manage`, dan audit transaksional. Workspace tahap seleksi dan assignment gelar masih mengikuti slice berikutnya.
+
 ---
 
 ## 11. Acara dan galeri
