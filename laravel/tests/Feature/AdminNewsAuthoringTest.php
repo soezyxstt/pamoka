@@ -90,6 +90,16 @@ class AdminNewsAuthoringTest extends TestCase
             'action' => 'news.update',
             'resource_id' => $article->id,
         ]);
+
+        $this->actingAs($editor)
+            ->withCookie('pamoka_admin_edition_id', $edition->id)
+            ->get(route('admin.news.edit', $article->id))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Admin/News/Form')
+                ->has('revisions', 2)
+                ->where('revisions.0.snapshot.title', 'Berita pembukaan pendaftaran diperbarui')
+            );
     }
 
     public function test_editor_can_save_a_structured_tiptap_document_and_public_route_renders_it(): void

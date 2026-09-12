@@ -98,6 +98,7 @@ class AdminNewsController extends Controller
                 'version' => (int) $revision->version,
                 'reason' => $revision->reason,
                 'createdAt' => $revision->created_at?->toIso8601String(),
+                'snapshot' => $revision->snapshot_json,
                 'author' => $revision->author === null ? null : [
                     'name' => $revision->author->name,
                     'email' => $revision->author->email,

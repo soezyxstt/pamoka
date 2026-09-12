@@ -90,8 +90,11 @@ Menu **Berita** (`/admin/content/news`) menyediakan studio penulisan cerita dan 
 5. **Simpan draft**: Simpan perubahan secara manual. Setiap simpan membuat snapshot draft, revision history, dan audit log.
 6. **Kelola status**: Artikel dapat diterbitkan, ditarik kembali ke draft, diarsipkan, atau dihapus sesuai permission.
 7. **Terbitkan**: Cover, ringkasan, dan isi wajib lengkap. Versi artikel diperiksa agar perubahan lama tidak menimpa perubahan baru.
+8. **Mode studio**: Gunakan mode **Editor** untuk fokus menulis, **Terpisah** untuk melihat editor dan hasil secara berdampingan, atau **Preview** untuk memeriksa tampilan artikel.
+9. **Autosave**: Setelah draft pertama dibuat, perubahan artikel tersimpan otomatis setelah 1,5 detik. Tombol **Terbitkan** aktif kembali setelah penyimpanan selesai.
+10. **Pulihkan revision**: Buka riwayat versi, pilih **Pulihkan ke editor**, lalu periksa perubahan sebelum menyimpan. Pemulihan tidak menimpa revision lama secara langsung.
 
-TipTap Laravel hanya menerima node dan mark yang diperlukan untuk artikel. Gambar dari URL eksternal, mark yang tidak dikenal, heading selain tingkat 2 atau 3, dan tautan HTTP ditolak oleh server. Autosave, split preview, serta restore revision masih mengikuti tahap migrasi berikutnya.
+TipTap Laravel hanya menerima node dan mark yang diperlukan untuk artikel. Gambar dari URL eksternal, mark yang tidak dikenal, heading selain tingkat 2 atau 3, dan tautan HTTP ditolak oleh server. Autosave, preview, dan pemulihan revision berjalan melalui boundary Laravel yang sama dengan penyimpanan manual.
 
 ---
 
@@ -192,7 +195,7 @@ Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake 
 
 Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture peserta, berita, media publik, organisasi, dan voting sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
 
-Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B sudah tersedia, sedangkan autosave, split preview, dan restore revision belum menjadi bagian cutover.
+Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B dan studio autosave atau preview atau restore pada Stage 10C sudah tersedia sebagai fitur sidecar, tetapi belum menjadi public cutover.
 
 ---
 
