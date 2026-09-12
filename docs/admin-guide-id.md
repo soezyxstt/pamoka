@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku saat ini. Sidecar Laravel di `laravel/` baru memiliki fondasi Google OAuth, approval akses, RBAC, audit log, dan konteks edisi aktif; belum menggantikan seluruh workflow CMS atau runtime publik.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita pada `/admin/content/news`. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -83,11 +83,11 @@ Menu **Sponsor** (`/admin/content/sponsors`) mengelola partner pendukung acara:
 
 Menu **Berita** (`/admin/content/news`) menyediakan studio penulisan cerita dan dokumentasi resmi:
 1. **Tulis berita**: Isi judul, alamat berita, ringkasan, dan foto sampul.
-2. **Atur isi**: Gunakan paragraf, heading 2 atau 3, tebal, miring, tautan, daftar, kutipan, dan gambar.
-3. **Pilih media**: Gunakan gambar dari Pustaka Media. Pengguna dengan izin pengelolaan media juga dapat mengunggah aset baru.
-4. **Simpan otomatis**: Draft disimpan setelah perubahan berhenti sejenak. Indikator di bagian atas menunjukkan status penyimpanan.
-5. **Periksa tampilan**: Pilih Editor, Keduanya, atau Pratinjau. Pratinjau tersedia dalam simulasi desktop dan 380 px.
-6. **Terbitkan**: Foto sampul, ringkasan, dan isi wajib lengkap. Riwayat revisi tetap tersedia untuk pemulihan.
+2. **Atur isi**: Pada sidecar Laravel, isi ditulis sebagai paragraf terstruktur melalui textarea. Format TipTap lengkap masih mengikuti workflow Next.js sampai slice editor berikutnya selesai.
+3. **Pilih media**: Pilih cover dari aset gambar berstatus siap. Upload media langsung dari authoring Laravel belum tersedia.
+4. **Simpan draft**: Simpan perubahan secara manual. Setiap simpan membuat snapshot draft, revision history, dan audit log.
+5. **Kelola status**: Artikel dapat diterbitkan, ditarik kembali ke draft, diarsipkan, atau dihapus sesuai permission.
+6. **Terbitkan**: Cover, ringkasan, dan isi wajib lengkap. Versi artikel diperiksa agar perubahan lama tidak menimpa perubahan baru.
 
 ---
 

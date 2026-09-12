@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminEditionContextController;
+use App\Http\Controllers\AdminNewsController;
 use App\Http\Controllers\AdminRequestAccessController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\Auth\GoogleAuthenticationController;
@@ -21,6 +22,15 @@ Route::post('/admin/request-access', [AdminRequestAccessController::class, 'stor
 Route::post('/admin/context/edition', [AdminEditionContextController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.edition-context.store');
 Route::get('/admin/users', [AdminUsersController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.users');
 Route::post('/admin/users/access-requests/{accessRequest}/approve', [AdminUsersController::class, 'approve'])->middleware(EnsureAdminAccess::class)->name('admin.access-requests.approve');
+Route::get('/admin/content/news', [AdminNewsController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.news.index');
+Route::get('/admin/content/news/new', [AdminNewsController::class, 'create'])->middleware(EnsureAdminAccess::class)->name('admin.news.create');
+Route::post('/admin/content/news', [AdminNewsController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.news.store');
+Route::get('/admin/content/news/{id}', [AdminNewsController::class, 'edit'])->middleware(EnsureAdminAccess::class)->name('admin.news.edit');
+Route::put('/admin/content/news/{id}', [AdminNewsController::class, 'update'])->middleware(EnsureAdminAccess::class)->name('admin.news.update');
+Route::post('/admin/content/news/{id}/publish', [AdminNewsController::class, 'publish'])->middleware(EnsureAdminAccess::class)->name('admin.news.publish');
+Route::post('/admin/content/news/{id}/unpublish', [AdminNewsController::class, 'unpublish'])->middleware(EnsureAdminAccess::class)->name('admin.news.unpublish');
+Route::post('/admin/content/news/{id}/archive', [AdminNewsController::class, 'archive'])->middleware(EnsureAdminAccess::class)->name('admin.news.archive');
+Route::delete('/admin/content/news/{id}', [AdminNewsController::class, 'destroy'])->middleware(EnsureAdminAccess::class)->name('admin.news.destroy');
 Route::get('/admin', AdminDashboardController::class)->middleware(EnsureAdminAccess::class)->name('admin.dashboard');
 Route::get('/monitor', [PublicPageController::class, 'monitor'])->middleware(EnsureAdminAccess::class)->name('admin.monitor');
 
