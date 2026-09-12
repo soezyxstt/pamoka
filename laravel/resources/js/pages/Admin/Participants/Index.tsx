@@ -90,7 +90,11 @@ export default function Index({ editionName, categories, stages, participants, c
                         <h1 className="mt-2 font-montserrat text-3xl font-semibold text-dgb-900">Mojang Jajaka</h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Kelola pendaftar dan profil peserta untuk {editionName}.</p>
                     </div>
-                    {canEdit && <Link href="/admin/content/participants/new" className="inline-flex min-h-10 items-center justify-center rounded-md bg-dgb px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-dgb-600">Tambah pendaftar</Link>}
+                    <div className="flex flex-wrap gap-2">
+                        <Link href="/admin/content/participants/stages" className="inline-flex min-h-10 items-center justify-center rounded-md border border-dgb px-4 py-2 text-sm font-semibold text-dgb transition-colors hover:bg-dgb hover:text-white">Atur tahap</Link>
+                        <Link href="/admin/content/participants/titles" className="inline-flex min-h-10 items-center justify-center rounded-md border border-dgb px-4 py-2 text-sm font-semibold text-dgb transition-colors hover:bg-dgb hover:text-white">Atur gelar</Link>
+                        {canEdit && <Link href="/admin/content/participants/new" className="inline-flex min-h-10 items-center justify-center rounded-md bg-dgb px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-dgb-600">Tambah pendaftar</Link>}
+                    </div>
                 </div>
 
                 <div className="mt-8 grid gap-3 rounded-xl border border-border bg-white p-4 sm:grid-cols-2 xl:grid-cols-4">
