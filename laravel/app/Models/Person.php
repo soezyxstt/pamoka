@@ -36,6 +36,11 @@ class Person extends Model
         return $this->hasMany(PersonSocialLink::class)->orderBy('display_order')->orderBy('id');
     }
 
+    public function committeeAssignments(): HasMany
+    {
+        return $this->hasMany(CommitteeAssignment::class);
+    }
+
     protected function casts(): array
     {
         return [

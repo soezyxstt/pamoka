@@ -66,6 +66,16 @@ class Edition extends Model
         return $this->hasMany(OrganizationAssignment::class);
     }
 
+    public function committeeUnits(): HasMany
+    {
+        return $this->hasMany(CommitteeUnit::class);
+    }
+
+    public function committeeAssignments(): HasMany
+    {
+        return $this->hasMany(CommitteeAssignment::class);
+    }
+
     public function votingCampaigns(): HasMany
     {
         return $this->hasMany(VotingCampaign::class);

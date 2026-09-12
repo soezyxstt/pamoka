@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, dan kepengurusan organisasi. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, dan panitia. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -113,6 +113,8 @@ Menu **Panitia** (`/admin/content/committee`) mengelola susunan panitia pelaksan
 1. **Isolasi Edisi**: Struktur panitia terikat secara ketat pada edisi yang dipilih di header.
 2. **Pohon Hierarki Panitia**: Bangun hierarki kepanitiaan (Steering Committee, Organizing Committee, Divisi Acara, Divisi Logistik, dll.).
 3. **Tambah Orang Cepat**: Modal pembuatan profil baru instan jika orang yang ditugaskan belum ada di direktori global.
+
+Pada sidecar Laravel, Stage 9F menyediakan daftar unit, unit induk hingga 4 tingkat, pengurutan unit sesaudara, pengelolaan status aktif, penugasan profil orang ke unit, pengubahan dan penghapusan penugasan, serta quick create profil dengan portrait dari aset gambar siap pakai. Semua perubahan ditujukan ke edisi pada selector header, memakai permission `content.edit`, optimistic version untuk penugasan, transaksi, dan audit log. Upload media langsung, import data operator, dan visual QA browser terautentikasi belum dilakukan.
 
 ---
 

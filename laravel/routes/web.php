@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminCommitteeController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminEditionContextController;
 use App\Http\Controllers\AdminEventsController;
@@ -81,6 +82,15 @@ Route::post('/admin/organization/people', [AdminOrganizationController::class, '
 Route::put('/admin/organization/people/{id}', [AdminOrganizationController::class, 'updatePerson'])->middleware(EnsureAdminAccess::class)->name('admin.organization.people.update');
 Route::delete('/admin/organization/people/{id}', [AdminOrganizationController::class, 'destroyPerson'])->middleware(EnsureAdminAccess::class)->name('admin.organization.people.destroy');
 Route::post('/admin/organization/legacy/map', [AdminOrganizationController::class, 'mapLegacy'])->middleware(EnsureAdminAccess::class)->name('admin.organization.legacy.map');
+Route::get('/admin/content/committee', [AdminCommitteeController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.committee.index');
+Route::post('/admin/content/committee/units', [AdminCommitteeController::class, 'storeUnit'])->middleware(EnsureAdminAccess::class)->name('admin.committee.units.store');
+Route::put('/admin/content/committee/units/{id}', [AdminCommitteeController::class, 'updateUnit'])->middleware(EnsureAdminAccess::class)->name('admin.committee.units.update');
+Route::post('/admin/content/committee/units/reorder', [AdminCommitteeController::class, 'reorderUnits'])->middleware(EnsureAdminAccess::class)->name('admin.committee.units.reorder');
+Route::delete('/admin/content/committee/units/{id}', [AdminCommitteeController::class, 'destroyUnit'])->middleware(EnsureAdminAccess::class)->name('admin.committee.units.destroy');
+Route::post('/admin/content/committee/assignments', [AdminCommitteeController::class, 'storeAssignment'])->middleware(EnsureAdminAccess::class)->name('admin.committee.assignments.store');
+Route::put('/admin/content/committee/assignments/{id}', [AdminCommitteeController::class, 'updateAssignment'])->middleware(EnsureAdminAccess::class)->name('admin.committee.assignments.update');
+Route::delete('/admin/content/committee/assignments/{id}', [AdminCommitteeController::class, 'destroyAssignment'])->middleware(EnsureAdminAccess::class)->name('admin.committee.assignments.destroy');
+Route::post('/admin/content/committee/people', [AdminCommitteeController::class, 'storeQuickPerson'])->middleware(EnsureAdminAccess::class)->name('admin.committee.people.store');
 Route::get('/admin/content/sponsors', [AdminSponsorsController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.index');
 Route::get('/admin/content/sponsors/new', [AdminSponsorsController::class, 'create'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.create');
 Route::post('/admin/content/sponsors', [AdminSponsorsController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.store');
