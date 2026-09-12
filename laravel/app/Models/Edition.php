@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['year', 'slug', 'name', 'timezone', 'lifecycle', 'starts_at', 'ends_at', 'organization_period_id', 'slogan', 'version'])]
+#[Fillable(['year', 'slug', 'name', 'timezone', 'lifecycle', 'starts_at', 'ends_at', 'organization_period_id', 'logo_media_id', 'slogan', 'version'])]
 class Edition extends Model
 {
     /** @use HasFactory<EditionFactory> */
@@ -19,6 +19,16 @@ class Edition extends Model
     public function organizationPeriod(): BelongsTo
     {
         return $this->belongsTo(OrganizationPeriod::class);
+    }
+
+    public function logoMedia(): BelongsTo
+    {
+        return $this->belongsTo(MediaAsset::class, 'logo_media_id');
+    }
+
+    public function programs(): HasMany
+    {
+        return $this->hasMany(EditionProgram::class);
     }
 
     public function categories(): HasMany
@@ -74,6 +84,11 @@ class Edition extends Model
     public function committeeAssignments(): HasMany
     {
         return $this->hasMany(CommitteeAssignment::class);
+    }
+
+    public function siteAssetBindings(): HasMany
+    {
+        return $this->hasMany(SiteAssetBinding::class);
     }
 
     public function votingCampaigns(): HasMany

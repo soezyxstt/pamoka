@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, dan panitia. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, panitia, identitas edisi, program unggulan, dan aset situs. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -61,7 +61,7 @@ Menu **Identitas Edisi** (`/admin/content/edition-settings`) mengelola brand dan
 Menu **Aset Situs Tetap** (`/admin/content/site-assets`) mengelola penempatan media pada 24 slot visual tetap untuk Beranda, Tentang, dan halaman kategori:
 1. Buka kelompok halaman yang ingin diubah. Hanya satu kelompok ditampilkan agar halaman tetap ringkas.
 2. Setiap kartu slot menampilkan nama bagian, jenis media, rasio, status keterisian, dan pratinjau.
-3. Gunakan tombol **Pilih media** untuk memilih dari pustaka atau mengunggah file baru.
+3. Gunakan pilihan media untuk memilih aset `ready` dari pustaka. Upload langsung dari authoring Laravel belum tersedia.
 4. Anda dapat menyesuaikan **Alt text khusus slot** dan titik fokus gambar (Fokus X dan Y dalam persentase 0 hingga 100).
 5. Tombol **Lepas media** mengosongkan slot terpilih tanpa menghapus file asli dari pustaka media.
 6. Tidak tersedia tombol penambahan slot sembarangan guna menjaga integritas desain situs publik.
@@ -115,6 +115,8 @@ Menu **Panitia** (`/admin/content/committee`) mengelola susunan panitia pelaksan
 3. **Tambah Orang Cepat**: Modal pembuatan profil baru instan jika orang yang ditugaskan belum ada di direktori global.
 
 Pada sidecar Laravel, Stage 9F menyediakan daftar unit, unit induk hingga 4 tingkat, pengurutan unit sesaudara, pengelolaan status aktif, penugasan profil orang ke unit, pengubahan dan penghapusan penugasan, serta quick create profil dengan portrait dari aset gambar siap pakai. Semua perubahan ditujukan ke edisi pada selector header, memakai permission `content.edit`, optimistic version untuk penugasan, transaksi, dan audit log. Upload media langsung, import data operator, dan visual QA browser terautentikasi belum dilakukan.
+
+Pada sidecar Laravel, Stage 9G menyediakan editor slogan dan logo edisi, CRUD program unggulan, reorder program, serta binding 24 slot aset situs terhadap media `ready` sesuai tipe slot. Binding mendukung alt override, titik fokus 0 sampai 100, optimistic version, isolasi edisi, permission `content.edit`, transaksi, dan audit log. Upload media langsung, import data operator, public cutover, dan visual QA browser terautentikasi belum dilakukan.
 
 ---
 

@@ -50,6 +50,16 @@ class MediaAsset extends Model
         return $this->hasMany(Person::class, 'portrait_media_id');
     }
 
+    public function editionLogos(): HasMany
+    {
+        return $this->hasMany(Edition::class, 'logo_media_id');
+    }
+
+    public function siteAssetBindings(): HasMany
+    {
+        return $this->hasMany(SiteAssetBinding::class, 'media_id');
+    }
+
     public function qrisParticipants(): HasMany
     {
         return $this->hasMany(Participant::class, 'qris_media_id');
