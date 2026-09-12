@@ -7,6 +7,7 @@ use App\Services\AuthorizationService;
 use App\Services\PublicCoreContent;
 use App\Services\PublicEventCatalog;
 use App\Services\PublicGalleryCatalog;
+use App\Services\PublicLegacyCatalog;
 use App\Services\PublicNewsCatalog;
 use App\Services\PublicOrganizationCatalog;
 use App\Services\PublicPageSectionCatalog;
@@ -21,6 +22,28 @@ use Inertia\Response;
 
 class PublicPageController extends Controller
 {
+    /**
+     * @var list<array{question: string, answer: string}>
+     */
+    private const LEGACY_FAQS = [
+        [
+            'question' => 'Bagaimana cara menghubungi MOKA Garut untuk kolaborasi?',
+            'answer' => 'Silakan hubungi Paguyuban Mojang Jajaka Kabupaten Garut melalui kanal sosial resmi untuk membahas kolaborasi.',
+        ],
+        [
+            'question' => 'Di mana saya dapat menemukan informasi kegiatan MOKA Garut?',
+            'answer' => 'Informasi kegiatan tersedia melalui situs ini dan kanal sosial resmi MOKA Garut.',
+        ],
+        [
+            'question' => 'Bagaimana cara menghubungi pengurus?',
+            'answer' => 'Gunakan alamat email atau kanal sosial resmi yang tercantum pada halaman ini.',
+        ],
+        [
+            'question' => 'Bagaimana cara bergabung dalam kegiatan?',
+            'answer' => 'Pantau pengumuman pendaftaran pada situs dan kanal resmi Paguyuban Mojang Jajaka Kabupaten Garut.',
+        ],
+    ];
+
     public function about(
         PublicCoreContent $content,
         PublicGalleryCatalog $gallery,
@@ -36,6 +59,35 @@ class PublicPageController extends Controller
             $siteAssets->forActiveEdition(),
             $aboutSections['missions'],
         ));
+    }
+
+    public function legacyContact(): Response
+    {
+        return Inertia::render('Public/Legacy/Contact', [
+            'meta' => [
+                'title' => 'Hubungi Kami | MOKA Garut',
+                'description' => 'Informasi kontak dan pertanyaan umum MOKA Garut.',
+            ],
+            'faqs' => self::LEGACY_FAQS,
+            'email' => 'mojangjajakakabgarut@gmail.com',
+            'socials' => [
+                ['label' => 'Instagram', 'url' => 'https://instagram.com/mokagarut'],
+                ['label' => 'X', 'url' => 'https://twitter.com/mokagarut'],
+                ['label' => 'YouTube', 'url' => 'https://youtube.com/@mokagarut'],
+            ],
+        ]);
+    }
+
+    public function legacyPasanggiri(PublicLegacyCatalog $catalog): Response
+    {
+        return Inertia::render('Public/Legacy/Pasanggiri', $catalog->pasanggiri());
+    }
+
+    public function legacyVoting(string $name, PublicLegacyCatalog $catalog): Response
+    {
+        return Inertia::render('Public/Legacy/Voting', [
+            'spotlight' => $catalog->spotlight($name),
+        ]);
     }
 
     public function event(string $event, PublicEventCatalog $catalog, PublicSponsorCatalog $sponsors): Response

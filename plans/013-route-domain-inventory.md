@@ -9,7 +9,7 @@ Stage ini bersifat dokumentasi dan audit read-only. Tidak ada penghapusan source
 ## Temuan utama
 
 - Terdapat 47 file `page.tsx` di bawah `src/app`.
-- Terdapat 33 route admin, 10 route publik, 1 route operasional monitor, dan 3 route internal atau legacy.
+- Terdapat 33 route admin, 10 route publik pada source utama, 1 route operasional monitor, dan 3 route internal atau legacy.
 - Terdapat 4 layout Next.js.
 - Terdapat 2 route handler API dan 1 konfigurasi handler UploadThing.
 - Skema Drizzle memiliki 48 tabel SQLite yang terbagi ke domain auth, CMS, organisasi, seleksi, galeri, voting, dan kompatibilitas legacy.
@@ -49,7 +49,9 @@ Stage ini bersifat dokumentasi dan audit read-only. Tidak ada penghapusan source
 | Kelompok | Route | Keputusan migrasi |
 |---|---|---|
 | Monitor | `/monitor` | Dipindahkan setelah auth, permission, dan tabel legacy sudah memiliki pengganti yang teruji. |
-| Internal atau legacy | `/z_contact___`, `/z_pasanggiri__`, `/z_pasanggiri__/voting/{name}` | Tidak menjadi prioritas route publik baru. Dipertahankan sampai pengganti dan kebutuhan redirect disepakati. |
+| Internal atau legacy | `/z_contact___`, `/z_pasanggiri__`, `/z_pasanggiri__/voting/{name}` | Sudah memiliki compatibility page di Laravel dengan path yang sama. Route Next.js lama tetap dipertahankan sebagai pembanding dan tidak diberi redirect otomatis. |
+
+Route detail berita `/berita/{slug}` merupakan route target Laravel yang melengkapi public reader CMS. Route ini tidak memiliki file page pada source Next.js saat inventory dibuat, sehingga tidak dihitung sebagai route source utama.
 
 ### Layout dan API
 
@@ -157,6 +159,12 @@ Pekerjaan harus berhenti pada slice berjalan jika:
 - parity visual atau perilaku belum dapat dibuktikan untuk route yang sedang dipindahkan;
 - perubahan target mulai membutuhkan penghapusan atau modifikasi source Next.js;
 - ditemukan konflik antara model legacy dan model CMS yang belum memiliki keputusan domain.
+
+## Rekonsiliasi route Stage 10F
+
+Stage 10F menutup tiga route internal atau legacy pada target Laravel tanpa mengubah source Next.js. `/z_contact___` memakai halaman kontak Inertia dengan FAQ dan kanal resmi, `/z_pasanggiri__` membaca finalis dan sponsor dari read model Laravel, sedangkan `/z_pasanggiri__/voting/{name}` mempertahankan halaman spotlight untuk slug lama dan menghubungkan kandidat yang sudah dikenal ke route voting kanonik. Slug yang belum ditemukan tetap menghasilkan halaman 200 dengan fallback aman, sesuai perilaku source lama.
+
+Gate route ini adalah test HTTP atau Inertia untuk ketiga path, rehearsal lokal dengan 44 finalis dan 68 sponsor, TypeScript, Vite production build, Pint, serta pemeriksaan diff. Tidak ada redirect otomatis ke route baru karena bentuk parameter route lama tidak selalu memiliki padanan semantik yang aman.
 
 ## Status Stage 2
 

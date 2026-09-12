@@ -160,6 +160,10 @@ Route::delete('/admin/content/galleries/{id}', [AdminGalleriesController::class,
 Route::get('/admin', AdminDashboardController::class)->middleware(EnsureAdminAccess::class)->name('admin.dashboard');
 Route::get('/monitor', [PublicPageController::class, 'monitor'])->middleware(EnsureAdminAccess::class)->name('admin.monitor');
 
+Route::get('/z_contact___', [PublicPageController::class, 'legacyContact'])->name('legacy.contact');
+Route::get('/z_pasanggiri__', [PublicPageController::class, 'legacyPasanggiri'])->name('legacy.pasanggiri');
+Route::get('/z_pasanggiri__/voting/{name}', [PublicPageController::class, 'legacyVoting'])->name('legacy.voting.show');
+
 Route::get('/tentang', [PublicPageController::class, 'about'])->name('public.about');
 Route::get('/berita/{slug}', [PublicPageController::class, 'news'])
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
