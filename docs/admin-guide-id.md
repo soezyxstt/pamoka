@@ -185,7 +185,15 @@ Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake 
 
 ---
 
-## 14. Audit Log & Keamanan
+## 14. Rehearsal Migrasi Laravel 2025
+
+Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture peserta, berita, media publik, organisasi, dan voting sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
+
+Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah.
+
+---
+
+## 15. Audit Log & Keamanan
 
 Menu **Audit** (`/admin/audit`):
 1. Setiap operasi penambahan, perubahan, penghapusan, dan pengunggahan dicatat secara otomatis dalam transaksi database yang sama.
@@ -194,7 +202,7 @@ Menu **Audit** (`/admin/audit`):
 
 Pada sidecar Laravel, halaman `/admin/audit` menampilkan 100 aktivitas terbaru dan hanya dapat dibaca dengan permission `audit.view`. Profil `/admin/profile` menampilkan status akun, role, dan izin efektif; pengguna pending tetap dapat melihat identitasnya tanpa memperoleh akses ke modul admin. Ikhtisar `/admin/content` menjadi pintu masuk modul konten yang sudah tersedia, sementara `/admin/content/pages` dan `/admin/content/people` mempertahankan redirect ke pengganti Laravel.
 
-## 15. Edisi & Kategori
+## 16. Edisi & Kategori
 
 Menu **Kelola Edisi** (`/admin/content/editions`) mengelola taxonomy dasar PAMOKA:
 1. **Draft edisi**: Buat periode baru dengan tahun unik. Edisi baru selalu berstatus draft.
