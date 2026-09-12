@@ -3,6 +3,7 @@
 namespace Tests\Feature\Http\Controllers;
 
 use App\Models\Edition;
+use App\Models\EditionProgram;
 use App\Models\MediaAsset;
 use App\Models\SiteAssetBinding;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -103,6 +104,29 @@ class HomeControllerTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('assets')
                 ->where('hero.image', '/hero-about.webp')
+            );
+    }
+
+    public function test_public_home_uses_active_edition_identity_and_programs_when_available(): void
+    {
+        $edition = Edition::factory()->create([
+            'year' => 2025,
+            'lifecycle' => 'active',
+            'slogan' => 'Slogan PAMOKA 2025',
+        ]);
+        EditionProgram::create([
+            'edition_id' => $edition->id,
+            'title' => 'Program berbasis edisi',
+            'description' => 'Program yang dikelola pada identitas edisi.',
+            'display_order' => 0,
+            'active' => true,
+        ]);
+
+        $this->get(route('home'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('hero.tagline', 'Slogan PAMOKA 2025')
+                ->has('programs', 1)
+                ->where('programs.0', 'Program berbasis edisi')
             );
     }
 }

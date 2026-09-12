@@ -8,8 +8,21 @@ final class PublicCoreContent
      * @param  list<array{title: string, description: string, image: string, date: string, href: string}>  $news
      * @return array<string, mixed>
      */
-    public function home(array $news = [], array $assets = []): array
+    public function home(array $news = [], array $assets = [], array $edition = []): array
     {
+        $programs = $edition['programs'] ?? [];
+        $programs = is_array($programs) && $programs !== [] ? array_values($programs) : [
+            'Pasanggiri Mojang Jajaka Kabupaten Garut.',
+            'MOKA Uninga: Mojang Jajaka Ulin Ngaprak Garut.',
+            'Balakecrakan: Buka Bersama Lampahan Kanggo Ngakeun Rukun Atikan Maparin Kaberkahan.',
+            'Hurub Guyub: Miara Hubungan, Ngabudikeun Guyub.',
+            'Berseka: Bersama Sehat Bareng Moka Garut.',
+            'Karmisun: Kartu Miara Kasundaan.',
+        ];
+        $tagline = is_string($edition['slogan'] ?? null) && trim($edition['slogan']) !== ''
+            ? trim($edition['slogan'])
+            : 'Nu Nyunda Tur Nyakola';
+
         return [
             'meta' => [
                 'title' => 'PAMOKA Garut',
@@ -17,7 +30,7 @@ final class PublicCoreContent
             ],
             'hero' => [
                 'title' => 'Paguyuban Mojang Jajaka Kabupaten Garut',
-                'tagline' => 'Nu Nyunda Tur Nyakola',
+                'tagline' => $tagline,
                 'image' => $this->assetUrl($assets, 'home.hero.bg', '/babancong.webp'),
                 'portrait' => $this->assetUrl($assets, 'home.hero.fg', '/hero.webp'),
                 'portraitAlt' => $this->assetAlt($assets, 'home.hero.fg', 'Perwakilan Mojang dan Jajaka Kabupaten Garut'),
@@ -28,14 +41,7 @@ final class PublicCoreContent
                 $this->assetUrl($assets, 'home.programs.collage.3', '/program-3.webp'),
                 $this->assetUrl($assets, 'home.programs.collage.4', '/bagendit.webp'),
             ],
-            'programs' => [
-                'Pasanggiri Mojang Jajaka Kabupaten Garut.',
-                'MOKA Uninga: Mojang Jajaka Ulin Ngaprak Garut.',
-                'Balakecrakan: Buka Bersama Lampahan Kanggo Ngakeun Rukun Atikan Maparin Kaberkahan.',
-                'Hurub Guyub: Miara Hubungan, Ngabudikeun Guyub.',
-                'Berseka: Bersama Sehat Bareng Moka Garut.',
-                'Karmisun: Kartu Miara Kasundaan.',
-            ],
+            'programs' => $programs,
             'news' => $news,
             'join' => [
                 'eyebrow' => 'Come Join Us',

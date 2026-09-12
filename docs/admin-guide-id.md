@@ -195,9 +195,9 @@ Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake 
 
 ## 14. Rehearsal Migrasi Laravel 2025
 
-Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture peserta, berita, media publik, organisasi, voting, dan page section sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
+Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture identitas edisi, program unggulan, peserta, berita, media publik, organisasi, voting, dan page section sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
 
-Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B, studio autosave atau preview atau restore pada Stage 10C, serta reader page section dan binding aset publik pada Stage 10D sudah tersedia sebagai fitur sidecar, tetapi belum menjadi public cutover.
+Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B, studio autosave atau preview atau restore pada Stage 10C, reader page section dan binding aset publik pada Stage 10D, serta reader slogan dan program aktif edisi pada Stage 10E sudah tersedia sebagai fitur sidecar, tetapi belum menjadi public cutover.
 
 ---
 

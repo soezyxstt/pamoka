@@ -17,6 +17,7 @@ class Rehearse2025 extends Command
      * @var array<string, string>
      */
     private const IMPORTS = [
+        'moka:import-edition-settings' => 'edition-settings-2025.json',
         'moka:import-participants' => 'participants-2025.json',
         'moka:import-news' => 'news-2025.json',
         'moka:import-public-media' => 'public-media-2025.json',

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "edition": {
+    "year": 2025,
+    "slug": "2025",
+    "name": "Pasanggiri Mojang Jajaka Garut 2025",
+    "timezone": "Asia/Jakarta",
+    "lifecycle": "active",
+    "slogan": "Nu Nyunda Tur Nyakola"
+  },
+  "programs": [
+    {
+      "title": "Pasanggiri Mojang Jajaka Kabupaten Garut.",
+      "description": null,
+      "displayOrder": 0,
+      "active": true
+    },
+    {
+      "title": "MOKA Uninga: Mojang Jajaka Ulin Ngaprak Garut.",
+      "description": null,
+      "displayOrder": 1,
+      "active": true
+    },
+    {
+      "title": "Balakecrakan: Buka Bersama Lampahan Kanggo Ngakeun Rukun Atikan Maparin Kaberkahan.",
+      "description": null,
+      "displayOrder": 2,
+      "active": true
+    },
+    {
+      "title": "Hurub Guyub: Miara Hubungan, Ngabudikeun Guyub.",
+      "description": null,
+      "displayOrder": 3,
+      "active": true
+    },
+    {
+      "title": "Berseka: Bersama Sehat Bareng Moka Garut.",
+      "description": null,
+      "displayOrder": 4,
+      "active": true
+    },
+    {
+      "title": "Karmisun: Kartu Miara Kasundaan.",
+      "description": null,
+      "displayOrder": 5,
+      "active": true
+    }
+  ]
+}

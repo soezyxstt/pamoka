@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Edition;
+use App\Models\EditionProgram;
 use App\Models\Event;
 use App\Models\GalleryItem;
 use App\Models\NewsArticle;
@@ -38,6 +39,7 @@ class Full2025RehearsalTest extends TestCase
             ->expectsOutputToContain('Rehearsal lengkap 2025 berhasil diterapkan.');
 
         $this->assertDatabaseCount('editions', 1);
+        $this->assertDatabaseCount('edition_programs', 6);
         $this->assertDatabaseCount('categories', 4);
         $this->assertDatabaseCount('selection_stages', 2);
         $this->assertDatabaseCount('participants', 60);
@@ -55,6 +57,8 @@ class Full2025RehearsalTest extends TestCase
         $this->assertDatabaseCount('vote_daily_tallies', 572);
 
         $this->assertSame('active', Edition::query()->where('year', 2025)->value('lifecycle'));
+        $this->assertSame('Nu Nyunda Tur Nyakola', Edition::query()->where('year', 2025)->value('slogan'));
+        $this->assertSame(6, EditionProgram::query()->whereBelongsTo(Edition::query()->where('year', 2025)->firstOrFail())->count());
         $this->assertSame(44, Participant::query()->where('stage', 'final')->count());
         $this->assertSame(3, NewsArticle::query()->where('status', 'published')->count());
         $this->assertSame(6, Event::query()->where('active', true)->count());
@@ -68,6 +72,7 @@ class Full2025RehearsalTest extends TestCase
             ->assertSuccessful();
 
         $this->assertDatabaseCount('editions', 1);
+        $this->assertDatabaseCount('edition_programs', 6);
         $this->assertDatabaseCount('participants', 60);
         $this->assertDatabaseCount('news_articles', 3);
         $this->assertDatabaseCount('page_sections', 1);
