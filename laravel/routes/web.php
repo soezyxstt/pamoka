@@ -1,15 +1,18 @@
 <?php
 
 use App\Http\Controllers\AdminCommitteeController;
+use App\Http\Controllers\AdminContentController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminEditionContextController;
 use App\Http\Controllers\AdminEditionSettingsController;
 use App\Http\Controllers\AdminEventsController;
 use App\Http\Controllers\AdminGalleriesController;
+use App\Http\Controllers\AdminAuditController;
 use App\Http\Controllers\AdminMediaController;
 use App\Http\Controllers\AdminNewsController;
 use App\Http\Controllers\AdminOrganizationController;
 use App\Http\Controllers\AdminParticipantsController;
+use App\Http\Controllers\AdminProfileController;
 use App\Http\Controllers\AdminRequestAccessController;
 use App\Http\Controllers\AdminSelectionController;
 use App\Http\Controllers\AdminSiteAssetsController;
@@ -30,9 +33,14 @@ Route::get('/auth/google/callback', [GoogleAuthenticationController::class, 'han
 Route::post('/logout', [GoogleAuthenticationController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/admin/request-access', AdminRequestAccessController::class)->middleware('auth')->name('admin.request-access');
 Route::post('/admin/request-access', [AdminRequestAccessController::class, 'store'])->middleware('auth')->name('admin.request-access.store');
+Route::get('/admin/profile', AdminProfileController::class)->middleware('auth')->name('admin.profile');
 Route::post('/admin/context/edition', [AdminEditionContextController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.edition-context.store');
 Route::get('/admin/users', [AdminUsersController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.users');
 Route::post('/admin/users/access-requests/{accessRequest}/approve', [AdminUsersController::class, 'approve'])->middleware(EnsureAdminAccess::class)->name('admin.access-requests.approve');
+Route::get('/admin/audit', AdminAuditController::class)->middleware(EnsureAdminAccess::class)->name('admin.audit');
+Route::get('/admin/content', [AdminContentController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.content.index');
+Route::get('/admin/content/pages', fn () => redirect()->route('admin.site-assets.index'))->middleware(EnsureAdminAccess::class)->name('admin.content.pages');
+Route::get('/admin/content/people', fn () => redirect()->route('admin.organization.index'))->middleware(EnsureAdminAccess::class)->name('admin.content.people');
 Route::get('/admin/content/edition-settings', [AdminEditionSettingsController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.edition-settings.index');
 Route::put('/admin/content/edition-settings', [AdminEditionSettingsController::class, 'update'])->middleware(EnsureAdminAccess::class)->name('admin.edition-settings.update');
 Route::post('/admin/content/edition-settings/programs', [AdminEditionSettingsController::class, 'storeProgram'])->middleware(EnsureAdminAccess::class)->name('admin.edition-settings.programs.store');

@@ -188,3 +188,5 @@ Menu **Audit** (`/admin/audit`):
 1. Setiap operasi penambahan, perubahan, penghapusan, dan pengunggahan dicatat secara otomatis dalam transaksi database yang sama.
 2. Mencatat waktu WIB (`Asia/Jakarta`), identitas operator, jenis sumber daya, aksi, serta rincian sebelum (*before*) dan sesudah (*after*) perubahan.
 3. Menjamin transparansi dan akuntabilitas penuh pada seluruh data CMS dan operasional voting.
+
+Pada sidecar Laravel, halaman `/admin/audit` menampilkan 100 aktivitas terbaru dan hanya dapat dibaca dengan permission `audit.view`. Profil `/admin/profile` menampilkan status akun, role, dan izin efektif; pengguna pending tetap dapat melihat identitasnya tanpa memperoleh akses ke modul admin. Ikhtisar `/admin/content` menjadi pintu masuk modul konten yang sudah tersedia, sementara `/admin/content/pages` dan `/admin/content/people` mempertahankan redirect ke pengganti Laravel.
