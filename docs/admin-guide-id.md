@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, panitia, edisi, kategori, identitas edisi, program unggulan, aset situs, operasi voting, dan pustaka media. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, slice authoring konten utama, serta boundary upload UploadThing. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -139,7 +139,7 @@ Menu **Mojang Jajaka** (`/admin/content/participants`) mengelola peserta Pasangg
    - **QRIS dan Voting**: QRIS dibuat di luar sistem, lalu gambarnya diunggah atau dipilih dari Pustaka Media.
 10. **Live Preview**: Pratinjau kartu peserta secara langsung saat mengedit.
 
-Pada sidecar Laravel, Stage 9C dan 9D sudah menyediakan daftar peserta, input pendaftar baru, editor identitas, prestasi, tautan sosial, foto profil multi-role, QRIS, URL pembayaran, status aktif, penghapusan aman, workspace tahap seleksi, keputusan massal, rollback, lifecycle tahap, pengelolaan gelar, dan assignment peserta final pada route `/admin/content/participants`. Perubahan hanya berlaku untuk edisi yang dipilih, memakai optimistic version, permission `participants.manage`, dan audit transaksional. Upload media langsung, import operator, dan cutover publik belum dilakukan.
+Pada sidecar Laravel, Stage 9C dan 9D sudah menyediakan daftar peserta, input pendaftar baru, editor identitas, prestasi, tautan sosial, foto profil multi-role, QRIS, URL pembayaran, status aktif, penghapusan aman, workspace tahap seleksi, keputusan massal, rollback, lifecycle tahap, pengelolaan gelar, dan assignment peserta final pada route `/admin/content/participants`. Perubahan hanya berlaku untuk edisi yang dipilih, memakai optimistic version, permission `participants.manage`, dan audit transaksional. Aset baru dapat diunggah melalui `/admin/media`, sedangkan import operator dan cutover publik belum dilakukan.
 
 ---
 
@@ -154,7 +154,7 @@ Menu **Galeri** (`/admin/content/galleries`) menyediakan dua tipe album:
 1. **Umum**: album tidak terkait acara.
 2. **Terkait acara**: album hanya dapat memilih acara dari edisi aktif.
 
-Di dalam album, admin dapat memilih beberapa foto dari Pustaka Media, menambahkan video YouTube, mengubah keterangan, dan mengatur urutan. Setiap item hanya memiliki satu sumber. Authoring Laravel memerlukan `gallery.manage`, menjaga owner tetap pada edisi aktif, dan mencatat perubahan item pada audit log. Upload media, preview split, serta pratinjau penuh masih mengikuti workflow Next.js sampai slice berikutnya selesai.
+Di dalam album, admin dapat memilih beberapa foto dari Pustaka Media, menambahkan video YouTube, mengubah keterangan, dan mengatur urutan. Setiap item hanya memiliki satu sumber. Authoring Laravel memerlukan `gallery.manage`, menjaga owner tetap pada edisi aktif, dan mencatat perubahan item pada audit log. Upload aset tersedia melalui `/admin/media`; preview split dan pratinjau penuh masih mengikuti workflow Next.js sampai slice berikutnya selesai.
 
 ---
 
@@ -168,7 +168,7 @@ Menu **Voting** (`/admin/voting`) pada sidecar Laravel mengelola kampanye voting
 5. **Tampilkan Hasil**: Ubah visibilitas dengan alasan. Kampanye draf belum dapat ditampilkan.
 6. **Tutup Manual**: Tutup kampanye dengan nama dan alasan. Tally terkunci setelah kampanye ditutup.
 
-Pada Stage 9H, workflow ini sudah tersedia sebagai halaman Inertia React Laravel. Permission `voting.view` diperlukan untuk membaca halaman, `voting.manage` untuk mengatur kampanye dan visibilitas hasil, serta `voting.tally` untuk mencatat nominal harian. Semua perubahan ditulis dalam transaksi dan audit log. Form authoring hanya memakai media QRIS berstatus `ready`; upload media langsung, import database operator, dan cutover publik belum dilakukan.
+Pada Stage 9H, workflow ini sudah tersedia sebagai halaman Inertia React Laravel. Permission `voting.view` diperlukan untuk membaca halaman, `voting.manage` untuk mengatur kampanye dan visibilitas hasil, serta `voting.tally` untuk mencatat nominal harian. Semua perubahan ditulis dalam transaksi dan audit log. Form authoring hanya memakai media QRIS berstatus `ready`; aset baru dapat disiapkan melalui `/admin/media`, sedangkan import database operator dan cutover publik belum dilakukan.
 
 ---
 
@@ -176,9 +176,12 @@ Pada Stage 9H, workflow ini sudah tersedia sebagai halaman Inertia React Laravel
 
 Menu **Pustaka Media** (`/admin/media`):
 1. **Folder Edisi & Global**: Buat folder khusus edisi untuk mengelompokkan aset tahunan atau folder global untuk aset bersama.
-2. **Upload Berbasis UploadThing pada CMS sumber**: Mendukung unggahan gambar (hingga 20 MB), video (hingga 512 MB), dan PDF (hingga 64 MB). Upload provider langsung pada sidecar Laravel belum tersedia.
+2. **Upload Berbasis UploadThing**: Sidecar Laravel menyediakan endpoint kompatibel UploadThing pada `/api/uploadthing` dan uploader React pada halaman ini. Gambar dibatasi 20 MB per file dan maksimal 10 file, video 512 MB dan maksimal 1 file, sedangkan PDF 64 MB dan maksimal 5 file. Permission `media.manage` diperlukan untuk meminta URL unggah.
 3. **Manajemen Aset**: Pada sidecar Laravel, filter media `ready`, cari nama file atau alt text, edit alt text, tandai gambar dekoratif, dan pindahkan aset antar folder tanpa merusak referensi tautan.
-4. **Audit**: Pembuatan dan perubahan folder, metadata aset, serta lokasi aset dicatat sebagai operasi `media.*` dalam transaksi.
+4. **Callback dan audit**: Callback provider diverifikasi dengan HMAC, lalu aset disimpan sebagai `uploadthing` dengan lifecycle `ready`, idempotensi berdasarkan provider key, dan audit `media.upload.complete` dalam transaksi.
+5. **Konfigurasi provider**: Isi `UPLOADTHING_TOKEN` pada `laravel/.env`. Jika aplikasi diakses dari jaringan publik, isi `UPLOADTHING_CALLBACK_URL` dengan URL HTTPS yang dapat dijangkau UploadThing. Laravel tidak menulis blob ke disk lokal, S3, atau R2.
+
+Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake unggah ke provider eksternal belum dijalankan pada tahap ini karena memerlukan target provider dan callback publik yang ditentukan operator.
 
 ---
 

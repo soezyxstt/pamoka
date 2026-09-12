@@ -10,6 +10,7 @@ use App\Models\MediaFolder;
 use App\Models\User;
 use App\Services\ActiveEditionContext;
 use App\Services\AuthorizationService;
+use App\Services\UploadThingAdapter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class AdminMediaController extends Controller
         Request $request,
         AuthorizationService $authorization,
         ActiveEditionContext $editionContext,
+        UploadThingAdapter $uploadThing,
     ): Response {
         $this->ensurePermission($request, $authorization, PermissionKey::MediaView);
 
@@ -98,6 +100,12 @@ class AdminMediaController extends Controller
             'total' => $total,
             'hasMore' => ($page - 1) * $limit + count($assets) < $total,
             'canManage' => $this->hasPermission($request, $authorization, PermissionKey::MediaManage),
+            'uploadThing' => [
+                'enabled' => $uploadThing->configured(),
+                'endpoint' => route('uploadthing.endpoint'),
+                'version' => UploadThingAdapter::VERSION,
+                'routes' => array_column($uploadThing->metadata(), 'slug'),
+            ],
         ]);
     }
 

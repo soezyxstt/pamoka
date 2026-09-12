@@ -2,6 +2,7 @@ import { Head, Link, router, useForm } from '@inertiajs/react'
 import { useMemo, useState } from 'react'
 import type { FormEvent, ReactNode, ReactElement } from 'react'
 import AdminLayout from '../../../layouts/AdminLayout'
+import MediaUploader from '../../../components/Admin/MediaUploader'
 
 type FolderScope = 'all' | 'edition' | 'global'
 type AssetType = 'all' | 'image' | 'video' | 'pdf'
@@ -56,6 +57,12 @@ type Props = {
     total: number
     hasMore: boolean
     canManage: boolean
+    uploadThing: {
+        enabled: boolean
+        endpoint: string
+        version: string
+        routes: string[]
+    }
 }
 
 export default function Index({
@@ -76,9 +83,11 @@ export default function Index({
     total,
     hasMore,
     canManage,
+    uploadThing,
 }: Props) {
     const [search, setSearch] = useState(initialSearch)
     const folderRows = useMemo(() => flattenFolders(folders), [folders])
+    const uploadFolderId = folderSelection !== '' && folderSelection !== 'root' ? folderSelection : null
 
     const navigate = (overrides: Record<string, string | number | undefined> = {}) => {
         const values: Record<string, string | number | undefined> = {
@@ -111,9 +120,7 @@ export default function Index({
                     <Stat label="Halaman" value={page} />
                 </div>
 
-                <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                    Upload provider langsung belum tersedia pada sidecar Laravel. Tahap ini mengelola aset siap pakai, folder, metadata, dan binding dengan audit.
-                </div>
+                {canManage && <div className="mt-6"><MediaUploader config={uploadThing} folderId={uploadFolderId} onUploaded={() => router.reload({ only: ['assets', 'folders', 'total'] })} /></div>}
 
                 <div className="mt-5 grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
                     <aside className="grid content-start gap-5">

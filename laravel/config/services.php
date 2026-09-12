@@ -41,4 +41,9 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'uploadthing' => [
+        'token' => env('UPLOADTHING_TOKEN'),
+        'callback_url' => env('UPLOADTHING_CALLBACK_URL'),
+    ],
+
 ];
