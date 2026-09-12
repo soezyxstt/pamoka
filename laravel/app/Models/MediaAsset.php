@@ -7,13 +7,19 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['provider', 'provider_key', 'url', 'filename', 'mime_type', 'bytes', 'alt', 'decorative', 'lifecycle', 'owner_user_id'])]
+#[Fillable(['provider', 'provider_key', 'url', 'filename', 'mime_type', 'bytes', 'alt', 'decorative', 'lifecycle', 'folder_id', 'owner_user_id'])]
 class MediaAsset extends Model
 {
     /** @use HasFactory<MediaAssetFactory> */
     use HasFactory, HasUuids;
+
+    public function folder(): BelongsTo
+    {
+        return $this->belongsTo(MediaFolder::class, 'folder_id');
+    }
 
     public function participantMedia(): HasMany
     {

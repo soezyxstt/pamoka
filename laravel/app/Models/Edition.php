@@ -91,6 +91,11 @@ class Edition extends Model
         return $this->hasMany(SiteAssetBinding::class);
     }
 
+    public function mediaFolders(): HasMany
+    {
+        return $this->hasMany(MediaFolder::class);
+    }
+
     public function votingCampaigns(): HasMany
     {
         return $this->hasMany(VotingCampaign::class);

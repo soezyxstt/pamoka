@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, panitia, identitas edisi, program unggulan, dan aset situs. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, panitia, identitas edisi, program unggulan, aset situs, operasi voting, dan pustaka media. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -176,8 +176,9 @@ Pada Stage 9H, workflow ini sudah tersedia sebagai halaman Inertia React Laravel
 
 Menu **Pustaka Media** (`/admin/media`):
 1. **Folder Edisi & Global**: Buat folder khusus edisi untuk mengelompokkan aset tahunan atau folder global untuk aset bersama.
-2. **Upload Berbasis UploadThing**: Mendukung unggahan gambar (hingga 20 MB), video (hingga 512 MB), dan PDF (hingga 64 MB).
-3. **Manajemen Aset**: Edit alt text, tandai gambar dekoratif, salin URL, atau pindahkan file antar folder tanpa merusak referensi tautan.
+2. **Upload Berbasis UploadThing pada CMS sumber**: Mendukung unggahan gambar (hingga 20 MB), video (hingga 512 MB), dan PDF (hingga 64 MB). Upload provider langsung pada sidecar Laravel belum tersedia.
+3. **Manajemen Aset**: Pada sidecar Laravel, filter media `ready`, cari nama file atau alt text, edit alt text, tandai gambar dekoratif, dan pindahkan aset antar folder tanpa merusak referensi tautan.
+4. **Audit**: Pembuatan dan perubahan folder, metadata aset, serta lokasi aset dicatat sebagai operasi `media.*` dalam transaksi.
 
 ---
 
