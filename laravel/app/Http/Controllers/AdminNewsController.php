@@ -12,6 +12,7 @@ use App\Models\NewsArticle;
 use App\Models\User;
 use App\Services\ActiveEditionContext;
 use App\Services\AuthorizationService;
+use App\Services\TipTapDocumentSanitizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,9 +21,12 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 class AdminNewsController extends Controller
 {
+    public function __construct(private readonly TipTapDocumentSanitizer $tiptap) {}
+
     public function index(
         Request $request,
         AuthorizationService $authorization,
@@ -197,11 +201,16 @@ class AdminNewsController extends Controller
         DB::transaction(function () use ($edition, $actor, $id, $version): void {
             $article = $this->lockedArticle($id, $edition);
             $this->assertVersion($article, (int) $version);
-            $this->assertPublishable($article);
-            $before = $this->snapshot($article);
-            if ($article->body_json === null && filled($article->body)) {
+
+            $normalizedBody = $this->normalizeStoredBody($article->body_json);
+            if ($normalizedBody !== null) {
+                $article->body_json = $this->materializeBodyDocument($normalizedBody);
+            } elseif ($article->body_json === null && filled($article->body)) {
                 $article->body_json = $this->plainTextDocument($article->body);
             }
+
+            $this->assertPublishable($article);
+            $before = $this->snapshot($article);
             $article->forceFill([
                 'status' => 'published',
                 'published_at' => $article->published_at ?? now(),
@@ -308,6 +317,17 @@ class AdminNewsController extends Controller
             }
         }
 
+        $mediaOptions = $media
+            ->map(fn (MediaAsset $asset): array => [
+                'id' => $asset->id,
+                'url' => $asset->url,
+                'filename' => $asset->filename,
+                'alt' => $asset->alt,
+                'lifecycle' => $asset->lifecycle,
+            ])
+            ->values()
+            ->all();
+
         return [
             'user' => $this->presentUser($request),
             'editionName' => $edition->name,
@@ -319,6 +339,7 @@ class AdminNewsController extends Controller
                 'slug' => $article->slug,
                 'excerpt' => $article->excerpt,
                 'body' => $this->bodyForForm($article),
+                'bodyJson' => $article->body_json ?? $this->plainTextDocument($article->body),
                 'kind' => $article->kind,
                 'sourceUrl' => $article->source_url,
                 'coverMediaId' => $article->cover_media_id,
@@ -327,16 +348,8 @@ class AdminNewsController extends Controller
                 'publishedAt' => $article->published_at?->toIso8601String(),
             ],
             'revisions' => $revisions,
-            'coverMediaOptions' => $media
-                ->map(fn (MediaAsset $asset): array => [
-                    'id' => $asset->id,
-                    'url' => $asset->url,
-                    'filename' => $asset->filename,
-                    'alt' => $asset->alt,
-                    'lifecycle' => $asset->lifecycle,
-                ])
-                ->values()
-                ->all(),
+            'coverMediaOptions' => $mediaOptions,
+            'bodyMediaOptions' => $mediaOptions,
         ];
     }
 
@@ -361,13 +374,14 @@ class AdminNewsController extends Controller
             'slug' => ['required', 'string', 'max:255', 'regex:/^[a-z0-9-]+$/', $slugRule],
             'excerpt' => ['nullable', 'string', 'max:5000'],
             'body' => ['nullable', 'string', 'max:100000'],
+            'body_json' => ['nullable', 'string', 'max:1000000'],
             'kind' => ['required', Rule::in(['internal', 'file', 'external'])],
             'source_url' => ['nullable', 'string', 'max:2000'],
             'cover_media_id' => ['nullable', 'uuid'],
             'version' => $articleId === null ? ['nullable', 'integer', 'min:1'] : ['required', 'integer', 'min:1'],
         ]);
 
-        foreach (['title', 'slug', 'excerpt', 'body', 'source_url'] as $field) {
+        foreach (['title', 'slug', 'excerpt', 'body', 'body_json', 'source_url'] as $field) {
             if (array_key_exists($field, $validated) && is_string($validated[$field])) {
                 $validated[$field] = trim($validated[$field]);
             }
@@ -379,8 +393,19 @@ class AdminNewsController extends Controller
         if (($validated['body'] ?? '') === '') {
             $validated['body'] = null;
         }
+        if (($validated['body_json'] ?? '') === '') {
+            $validated['body_json'] = null;
+        }
         if (($validated['source_url'] ?? '') === '') {
             $validated['source_url'] = null;
+        }
+
+        if ($validated['body_json'] !== null) {
+            try {
+                $validated['body_json'] = $this->tiptap->normalize($validated['body_json']);
+            } catch (InvalidArgumentException $exception) {
+                throw ValidationException::withMessages(['body_json' => $exception->getMessage()]);
+            }
         }
 
         $sourceUrl = $validated['source_url'] ?? null;
@@ -405,14 +430,17 @@ class AdminNewsController extends Controller
      */
     private function articleAttributes(array $payload): array
     {
+        $normalizedBody = $payload['body_json'] ?? null;
+        $bodyDocument = is_array($normalizedBody)
+            ? $this->materializeBodyDocument($normalizedBody)
+            : (($payload['body'] ?? null) === null ? null : $this->plainTextDocument((string) $payload['body']));
+
         return [
             'title' => $payload['title'],
             'slug' => $payload['slug'],
             'excerpt' => $payload['excerpt'] ?? null,
             'body' => $payload['body'] ?? null,
-            'body_json' => ($payload['body'] ?? null) === null
-                ? null
-                : $this->plainTextDocument((string) $payload['body']),
+            'body_json' => $bodyDocument,
             'kind' => $payload['kind'],
             'source_url' => $payload['source_url'] ?? null,
             'cover_media_id' => $payload['cover_media_id'] ?? null,
@@ -565,6 +593,48 @@ class AdminNewsController extends Controller
             ->where('lifecycle', 'ready')
             ->where('mime_type', 'like', 'image/%')
             ->first();
+    }
+
+    /**
+     * @param  array{document: array<string, mixed>, imageMediaIds: list<string>}  $normalized
+     * @return array<string, mixed>
+     */
+    private function materializeBodyDocument(array $normalized): array
+    {
+        $mediaIds = $normalized['imageMediaIds'];
+        $assets = count($mediaIds) === 0
+            ? collect()
+            : MediaAsset::query()->whereIn('id', $mediaIds)->get()->keyBy('id');
+
+        foreach ($mediaIds as $mediaId) {
+            $asset = $assets->get($mediaId);
+            if ($asset === null || $asset->lifecycle !== 'ready' || ! str_starts_with($asset->mime_type, 'image/')) {
+                throw ValidationException::withMessages([
+                    'body_json' => 'Gambar isi berita harus berupa aset gambar yang valid dan berstatus siap.',
+                ]);
+            }
+        }
+
+        return $this->tiptap->replaceImageSources(
+            $normalized['document'],
+            $assets->mapWithKeys(fn (MediaAsset $asset): array => [$asset->id => $asset->url])->all(),
+        );
+    }
+
+    /**
+     * @return array{document: array<string, mixed>, imageMediaIds: list<string>}|null
+     */
+    private function normalizeStoredBody(mixed $body): ?array
+    {
+        if ($body === null) {
+            return null;
+        }
+
+        try {
+            return $this->tiptap->normalize($body);
+        } catch (InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['body_json' => $exception->getMessage()]);
+        }
     }
 
     private function upsertDraft(NewsArticle $article, User $actor): void

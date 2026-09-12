@@ -92,6 +92,117 @@ class AdminNewsAuthoringTest extends TestCase
         ]);
     }
 
+    public function test_editor_can_save_a_structured_tiptap_document_and_public_route_renders_it(): void
+    {
+        $publisher = $this->adminWith(
+            PermissionKey::ContentView,
+            PermissionKey::NewsManage,
+            PermissionKey::ContentPublish,
+        );
+        $edition = Edition::factory()->create(['year' => 2025, 'lifecycle' => 'active']);
+        $media = MediaAsset::factory()->create([
+            'lifecycle' => 'ready',
+            'mime_type' => 'image/webp',
+            'alt' => 'Foto kegiatan PAMOKA',
+        ]);
+        $document = [
+            'type' => 'doc',
+            'content' => [
+                [
+                    'type' => 'heading',
+                    'attrs' => ['level' => 2],
+                    'content' => [[
+                        'type' => 'text',
+                        'text' => 'Pendaftaran peserta 2025',
+                        'marks' => [['type' => 'bold']],
+                    ]],
+                ],
+                [
+                    'type' => 'paragraph',
+                    'content' => [[
+                        'type' => 'text',
+                        'text' => 'Informasi lengkap tersedia di halaman resmi.',
+                        'marks' => [[
+                            'type' => 'link',
+                            'attrs' => ['href' => 'https://pamoka.example/pendaftaran'],
+                        ]],
+                    ]],
+                ],
+                [
+                    'type' => 'image',
+                    'attrs' => [
+                        'src' => 'https://attacker.example/not-allowed.webp',
+                        'mediaAssetId' => $media->id,
+                        'alt' => 'Poster pendaftaran',
+                    ],
+                ],
+            ],
+        ];
+
+        $this->actingAs($publisher)
+            ->withCookie('pamoka_admin_edition_id', $edition->id)
+            ->post(route('admin.news.store'), [
+                'title' => 'Pendaftaran peserta 2025',
+                'slug' => 'pendaftaran-peserta-2025',
+                'excerpt' => 'Informasi pendaftaran peserta untuk rangkaian kegiatan 2025.',
+                'body' => '',
+                'body_json' => json_encode($document, JSON_THROW_ON_ERROR),
+                'kind' => 'internal',
+                'source_url' => '',
+                'cover_media_id' => $media->id,
+            ])
+            ->assertRedirect();
+
+        $article = NewsArticle::query()->where('slug', 'pendaftaran-peserta-2025')->firstOrFail();
+        $stored = $article->body_json;
+
+        $this->assertSame('heading', $stored['content'][0]['type']);
+        $this->assertSame('bold', $stored['content'][0]['content'][0]['marks'][0]['type']);
+        $this->assertSame($media->url, $stored['content'][2]['attrs']['src']);
+        $this->assertSame($media->id, $stored['content'][2]['attrs']['mediaAssetId']);
+
+        $this->actingAs($publisher)
+            ->withCookie('pamoka_admin_edition_id', $edition->id)
+            ->post(route('admin.news.publish', $article->id), ['version' => 1])
+            ->assertRedirect();
+
+        $this->get(route('public.news.show', ['slug' => $article->slug]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Public/News/Show')
+                ->where('article.bodyJson.content.0.type', 'heading')
+                ->where('article.bodyJson.content.2.attrs.src', $media->url)
+            );
+    }
+
+    public function test_editor_rejects_an_external_image_without_a_ready_media_reference(): void
+    {
+        $editor = $this->adminWith(PermissionKey::ContentView, PermissionKey::NewsManage);
+        $edition = Edition::factory()->create(['year' => 2025, 'lifecycle' => 'active']);
+
+        $response = $this->actingAs($editor)
+            ->withCookie('pamoka_admin_edition_id', $edition->id)
+            ->post(route('admin.news.store'), [
+                'title' => 'Berita dengan gambar eksternal',
+                'slug' => 'berita-dengan-gambar-eksternal',
+                'excerpt' => 'Ringkasan berita yang cukup untuk disimpan.',
+                'body' => '',
+                'body_json' => json_encode([
+                    'type' => 'doc',
+                    'content' => [[
+                        'type' => 'image',
+                        'attrs' => ['src' => 'https://attacker.example/image.webp'],
+                    ]],
+                ], JSON_THROW_ON_ERROR),
+                'kind' => 'internal',
+                'source_url' => '',
+                'cover_media_id' => '',
+            ]);
+
+        $response->assertSessionHasErrors('body_json');
+        $this->assertDatabaseMissing('news_articles', ['slug' => 'berita-dengan-gambar-eksternal']);
+    }
+
     public function test_publisher_can_publish_unpublish_and_archive_a_ready_article(): void
     {
         $publisher = $this->adminWith(

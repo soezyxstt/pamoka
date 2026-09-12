@@ -84,11 +84,14 @@ Menu **Sponsor** (`/admin/content/sponsors`) mengelola partner pendukung acara:
 
 Menu **Berita** (`/admin/content/news`) menyediakan studio penulisan cerita dan dokumentasi resmi:
 1. **Tulis berita**: Isi judul, alamat berita, ringkasan, dan foto sampul.
-2. **Atur isi**: Pada sidecar Laravel, isi ditulis sebagai paragraf terstruktur melalui textarea. Format TipTap lengkap masih mengikuti workflow Next.js sampai slice editor berikutnya selesai.
-3. **Pilih media**: Pilih cover dari aset gambar berstatus siap. Upload media langsung dari authoring Laravel belum tersedia.
-4. **Simpan draft**: Simpan perubahan secara manual. Setiap simpan membuat snapshot draft, revision history, dan audit log.
-5. **Kelola status**: Artikel dapat diterbitkan, ditarik kembali ke draft, diarsipkan, atau dihapus sesuai permission.
-6. **Terbitkan**: Cover, ringkasan, dan isi wajib lengkap. Versi artikel diperiksa agar perubahan lama tidak menimpa perubahan baru.
+2. **Atur isi**: Pada sidecar Laravel, gunakan TipTap untuk heading tingkat 2 atau 3, format tebal atau miring, daftar, kutipan, tautan HTTPS atau jalur internal, serta undo atau redo.
+3. **Sisipkan gambar**: Pilih gambar siap pakai dari pustaka media melalui tombol **Sisipkan gambar**. Gambar rich text selalu menyimpan referensi `mediaAssetId`; URL akhirnya ditentukan server dari aset yang tervalidasi.
+4. **Pilih media**: Pilih cover dari aset gambar berstatus siap. Upload media langsung dilakukan melalui `/admin/media`, bukan dari editor berita.
+5. **Simpan draft**: Simpan perubahan secara manual. Setiap simpan membuat snapshot draft, revision history, dan audit log.
+6. **Kelola status**: Artikel dapat diterbitkan, ditarik kembali ke draft, diarsipkan, atau dihapus sesuai permission.
+7. **Terbitkan**: Cover, ringkasan, dan isi wajib lengkap. Versi artikel diperiksa agar perubahan lama tidak menimpa perubahan baru.
+
+TipTap Laravel hanya menerima node dan mark yang diperlukan untuk artikel. Gambar dari URL eksternal, mark yang tidak dikenal, heading selain tingkat 2 atau 3, dan tautan HTTP ditolak oleh server. Autosave, split preview, serta restore revision masih mengikuti tahap migrasi berikutnya.
 
 ---
 
@@ -189,7 +192,7 @@ Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake 
 
 Rehearsal lengkap tersedia melalui runbook [`laravel-migration-rehearsal.md`](runbooks/laravel-migration-rehearsal.md). Command `moka:rehearse-2025` memvalidasi fixture peserta, berita, media publik, organisasi, dan voting sebelum apply. Mode `--apply` hanya menerima database lokal `pamoka_test`, berjalan transaksional, dan dapat diulang tanpa menggandakan record.
 
-Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah.
+Rehearsal ini adalah gate migrasi data lokal. Import ke database operator, handshake provider eksternal, dan public cutover membutuhkan otorisasi terpisah. Editor WYSIWYG berita pada Stage 10B sudah tersedia, sedangkan autosave, split preview, dan restore revision belum menjadi bagian cutover.
 
 ---
 

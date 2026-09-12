@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react'
 import { useState } from 'react'
 import type { FormEvent, ReactElement } from 'react'
 import AdminLayout from '../../../layouts/AdminLayout'
+import TipTapEditor, { type TipTapDocument, type TipTapMediaOption } from '../../../components/Admin/TipTapEditor'
 
 type Article = {
     id: string
@@ -9,6 +10,7 @@ type Article = {
     slug: string
     excerpt: string | null
     body: string | null
+    bodyJson: TipTapDocument | null
     kind: 'internal' | 'file' | 'external'
     sourceUrl: string | null
     coverMediaId: string | null
@@ -41,6 +43,7 @@ type NewsFormData = {
     slug: string
     excerpt: string
     body: string
+    body_json: string
     kind: Article['kind']
     source_url: string
     cover_media_id: string
@@ -52,17 +55,20 @@ type NewsFormProps = {
     article: Article | null
     revisions: Revision[]
     coverMediaOptions: MediaOption[]
+    bodyMediaOptions: TipTapMediaOption[]
     canEdit: boolean
     canPublish: boolean
 }
 
-export default function Form({ editionName, article, revisions, coverMediaOptions, canEdit, canPublish }: NewsFormProps) {
+export default function Form({ editionName, article, revisions, coverMediaOptions, bodyMediaOptions, canEdit, canPublish }: NewsFormProps) {
     const [slugCustomized, setSlugCustomized] = useState(article !== null)
+    const initialBodyJson = article?.bodyJson ?? plainTextDocument(article?.body ?? null)
     const form = useForm<NewsFormData>({
         title: article?.title ?? '',
         slug: article?.slug ?? '',
         excerpt: article?.excerpt ?? '',
         body: article?.body ?? '',
+        body_json: initialBodyJson ? JSON.stringify(initialBodyJson) : '',
         kind: article?.kind ?? 'internal',
         source_url: article?.sourceUrl ?? '',
         cover_media_id: article?.coverMediaId ?? '',
@@ -168,13 +174,15 @@ export default function Form({ editionName, article, revisions, coverMediaOption
                                     className="rounded-md border border-border px-3 py-2 text-sm leading-6 outline-none focus:border-dgb disabled:bg-muted"
                                 />
                             </Field>
-                            <Field label="Isi berita" hint="Pisahkan paragraf dengan satu baris kosong." error={form.errors.body}>
-                                <textarea
-                                    value={form.data.body}
-                                    onChange={(event) => form.setData('body', event.target.value)}
-                                    disabled={!canEdit}
-                                    rows={14}
-                                    className="rounded-md border border-border px-3 py-2 text-sm leading-7 outline-none focus:border-dgb disabled:bg-muted"
+                            <Field label="Isi berita" hint="Gunakan toolbar untuk heading, format teks, daftar, tautan, kutipan, dan gambar." error={form.errors.body_json ?? form.errors.body}>
+                                <TipTapEditor
+                                    content={initialBodyJson}
+                                    mediaOptions={bodyMediaOptions}
+                                    editable={canEdit}
+                                    onChange={(document, rawText) => {
+                                        form.setData('body_json', JSON.stringify(document))
+                                        form.setData('body', rawText)
+                                    }}
                                 />
                             </Field>
                         </div>
@@ -283,6 +291,18 @@ function slugify(value: string): string {
         .replace(/[^\w\s-]/g, '')
         .replace(/[\s_-]+/g, '-')
         .replace(/^-+|-+$/g, '')
+}
+
+function plainTextDocument(body: string | null): TipTapDocument | null {
+    if (!body || body.trim() === '') return null
+
+    return {
+        type: 'doc',
+        content: body.trim().split(/\r?\n\s*\r?\n/).map((paragraph) => ({
+            type: 'paragraph',
+            content: [{ type: 'text', text: paragraph }],
+        })),
+    }
 }
 
 function statusLabel(status: string): string {
