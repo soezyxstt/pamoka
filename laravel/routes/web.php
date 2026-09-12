@@ -24,6 +24,9 @@ Route::post('/admin/users/access-requests/{accessRequest}/approve', [AdminUsersC
 Route::get('/admin', AdminDashboardController::class)->middleware(EnsureAdminAccess::class)->name('admin.dashboard');
 
 Route::get('/tentang', [PublicPageController::class, 'about'])->name('public.about');
+Route::get('/berita/{slug}', [PublicPageController::class, 'news'])
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('public.news.show');
 Route::get('/rangkaian-kegiatan/{event}', [PublicPageController::class, 'event'])->name('public.events.show');
 Route::get('/profil-finalis/{category}/{name}', [PublicPageController::class, 'finalist'])->name('public.finalists.show');
 Route::get('/profil-finalis/{category}', [PublicPageController::class, 'finalists'])->name('public.finalists.index');

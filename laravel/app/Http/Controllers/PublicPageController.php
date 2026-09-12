@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Services\PublicCoreContent;
 use App\Services\PublicEventCatalog;
 use App\Services\PublicGalleryCatalog;
+use App\Services\PublicNewsCatalog;
+use App\Services\PublicOrganizationCatalog;
 use App\Services\PublicParticipantCatalog;
 use App\Services\PublicSponsorCatalog;
 use Inertia\Inertia;
@@ -12,9 +14,15 @@ use Inertia\Response;
 
 class PublicPageController extends Controller
 {
-    public function about(PublicCoreContent $content, PublicGalleryCatalog $gallery): Response
-    {
-        return Inertia::render('Public/About', $content->about($gallery->aboutVideos()));
+    public function about(
+        PublicCoreContent $content,
+        PublicGalleryCatalog $gallery,
+        PublicOrganizationCatalog $organization,
+    ): Response {
+        return Inertia::render('Public/About', $content->about(
+            $gallery->aboutVideos(),
+            $organization->about(),
+        ));
     }
 
     public function event(string $event, PublicEventCatalog $catalog, PublicSponsorCatalog $sponsors): Response
@@ -24,6 +32,15 @@ class PublicPageController extends Controller
         abort_if($data === null, 404, 'Kegiatan tidak ditemukan.');
 
         return Inertia::render('Public/Events/Show', $data);
+    }
+
+    public function news(string $slug, PublicNewsCatalog $catalog): Response
+    {
+        $data = $catalog->detail($slug);
+
+        abort_if($data === null, 404, 'Berita tidak ditemukan.');
+
+        return Inertia::render('Public/News/Show', $data);
     }
 
     public function finalists(string $category, PublicParticipantCatalog $catalog): Response

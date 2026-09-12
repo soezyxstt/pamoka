@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "people": [
+    { "slug": "cecep-safaatul-barkah", "name": "Cecep Safaatul Barkah", "gender": "L", "portrait": "/pengurus/Cecep Safaatul Barkah.png" },
+    { "slug": "kiki-syarief", "name": "Kiki Syarief", "gender": "L", "portrait": "/pengurus/Kiki Syarief.png" },
+    { "slug": "muhammad-khaerul", "name": "Muhammad Khaerul", "gender": "L", "portrait": "/pengurus/Muhammad Khaerul.png" },
+    { "slug": "nurman-purnama-gumilar", "name": "Nurman Purnama Gumilar", "gender": "L", "portrait": "/pengurus/Nurman Purnama Gumilar.png" },
+    { "slug": "salawat-fatih-ibrahim", "name": "Salawat Fatih Ibrahim", "gender": "L", "portrait": "/pengurus/Salawat Fatih Ibrahim.png" },
+    { "slug": "yudhan-triyana", "name": "Yudhan Triyana", "gender": "L", "portrait": "/pengurus/Yudhan Triyana.png" },
+    { "slug": "syahril", "name": "Syahril", "gender": "L", "portrait": "/pengurus/Syahril.png" },
+    { "slug": "c-allifiana-fadhilah-jasmine", "name": "C Allifiana Fadhilah Jasmine", "gender": "P", "portrait": "/pengurus/C Allifiana Fadhilah Jasmine.png" },
+    { "slug": "rian-nurdiansyah", "name": "Rian Nurdiansyah", "gender": "L", "portrait": "/pengurus/Rian Nurdiansyah.png" },
+    { "slug": "zalfa-fadhilah", "name": "Zalfa Fadhilah", "gender": "P", "portrait": "/pengurus/Zalfa Fadhilah.png" },
+    { "slug": "moch-adval-ginalingga-darmawan", "name": "Moch Adval Ginalingga Darmawan", "gender": "L", "portrait": "/pengurus/Moch Adval Ginalingga Darmawan.png" },
+    { "slug": "gina-listya-nuraini", "name": "Gina Listya Nuraini", "gender": "P", "portrait": "/pengurus/Gina Listya Nuraini.png" },
+    { "slug": "roby-akhmad-akbari-santoso", "name": "Roby Akhmad Akbari Santoso", "gender": "L", "portrait": "/pengurus/Roby Akhmad Akbari Santoso.png" },
+    { "slug": "gumilang-m-khotib", "name": "Gumilang M Khotib", "gender": "L", "portrait": "/pengurus/Gumilang M Khotib.png" },
+    { "slug": "riana-ahsan", "name": "Riana Ahsan", "gender": "L", "portrait": "/pengurus/Riana Ahsan.png" },
+    { "slug": "mochamad-haiqal-aditia-pratama", "name": "Mochamad Haiqal Aditia Pratama", "gender": "L", "portrait": "/pengurus/Mochamad Haiqal Aditia Pratama.png" },
+    { "slug": "teguh-ramadhan", "name": "Teguh Ramadhan", "gender": "L", "portrait": "/ketua/Teguh Ramadhan.png" },
+    { "slug": "yesi-haerunisa", "name": "Yesi Haerunisa", "gender": "P", "portrait": "/ketua/Yesi Haerunisa.png" },
+    { "slug": "isnat-ahmad-zulfaqor", "name": "Isnat Ahmad Zulfaqor", "gender": "L", "portrait": "/ketua/Isnat Ahmad Zulfaqor.png" }
+  ],
+  "assignments": [
+    { "personSlug": "cecep-safaatul-barkah", "group": "leadership", "title": "Ketua Dewan Pengawas", "displayOrder": 1, "active": true },
+    { "personSlug": "kiki-syarief", "group": "leadership", "title": "Dewan Pengawas I", "displayOrder": 2, "active": true },
+    { "personSlug": "muhammad-khaerul", "group": "leadership", "title": "Dewan Pengawas II", "displayOrder": 3, "active": true },
+    { "personSlug": "nurman-purnama-gumilar", "group": "leadership", "title": "Ketua Umum", "displayOrder": 4, "active": true },
+    { "personSlug": "salawat-fatih-ibrahim", "group": "leadership", "title": "Wakil Ketua I", "displayOrder": 5, "active": true },
+    { "personSlug": "yudhan-triyana", "group": "leadership", "title": "Wakil Ketua II", "displayOrder": 6, "active": true },
+    { "personSlug": "syahril", "group": "leadership", "title": "Sekretaris Umum", "displayOrder": 7, "active": true },
+    { "personSlug": "c-allifiana-fadhilah-jasmine", "group": "leadership", "title": "Wakil Sekretaris", "displayOrder": 8, "active": true },
+    { "personSlug": "rian-nurdiansyah", "group": "leadership", "title": "Bendahara Umum", "displayOrder": 9, "active": true },
+    { "personSlug": "zalfa-fadhilah", "group": "leadership", "title": "Wakil Bendahara", "displayOrder": 10, "active": true },
+    { "personSlug": "moch-adval-ginalingga-darmawan", "group": "leadership", "title": "Kepala Bidang Penelitian dan Pengembangan", "displayOrder": 11, "active": true },
+    { "personSlug": "gina-listya-nuraini", "group": "leadership", "title": "Kepala Bidang Pengadaan Sumber Daya Organisasi", "displayOrder": 12, "active": true },
+    { "personSlug": "roby-akhmad-akbari-santoso", "group": "leadership", "title": "Kepala Bidang Hubungan Masyarakat", "displayOrder": 13, "active": true },
+    { "personSlug": "gumilang-m-khotib", "group": "leadership", "title": "Bidang Kreatif & Media Sosial", "displayOrder": 14, "active": true },
+    { "personSlug": "riana-ahsan", "group": "leadership", "title": "Bidang Kreatif & Media Sosial", "displayOrder": 15, "active": true },
+    { "personSlug": "mochamad-haiqal-aditia-pratama", "group": "leadership", "title": "Kepala Bidang Ekonomi Kreatif", "displayOrder": 16, "active": true },
+    { "personSlug": "cecep-safaatul-barkah", "group": "past_leaders", "title": "2008-2013", "displayOrder": 1, "active": true },
+    { "personSlug": "teguh-ramadhan", "group": "past_leaders", "title": "2013-2016", "displayOrder": 2, "active": true },
+    { "personSlug": "yesi-haerunisa", "group": "past_leaders", "title": "2016-2019", "displayOrder": 3, "active": true },
+    { "personSlug": "isnat-ahmad-zulfaqor", "group": "past_leaders", "title": "2019-2021", "displayOrder": 4, "active": true },
+    { "personSlug": "nurman-purnama-gumilar", "group": "past_leaders", "title": "2021-Sekarang", "displayOrder": 5, "active": true }
+  ],
+  "notes": [
+    "Snapshot organisasi dipetakan dari src/lib/organogram.ts.",
+    "Assignment publik bersifat global dan tidak diikat ke edisi karena halaman sumber tidak memberikan konteks edisi.",
+    "Foto orang yang muncul pada dua kelompok memakai satu portrait media per orang."
+  ]
+}

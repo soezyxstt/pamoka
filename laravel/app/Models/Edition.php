@@ -61,6 +61,11 @@ class Edition extends Model
         return $this->hasMany(Sponsor::class);
     }
 
+    public function organizationAssignments(): HasMany
+    {
+        return $this->hasMany(OrganizationAssignment::class);
+    }
+
     /**
      * @return array<string, string>
      */

@@ -51,10 +51,13 @@ final class PublicCoreContent
 
     /**
      * @param  list<array{id: string, title: string}>  $videos
+     * @param  array{leadership: list<array{name: string, position: string, image: string, gender: string}>, pastLeaders: list<array{name: string, position: string, image: string, gender: string}>}|null  $organization
      * @return array<string, mixed>
      */
-    public function about(array $videos = []): array
+    public function about(array $videos = [], ?array $organization = null): array
     {
+        $organization ??= PublicOrganizationCatalog::snapshot();
+
         return [
             'meta' => [
                 'title' => 'Tentang Kami | MOKA Garut',
@@ -81,49 +84,10 @@ final class PublicCoreContent
                 'description' => 'Paguyuban Mojang Jajaka Kabupaten Garut merupakan perkumpulan yang sah dan terdaftar secara hukum di Indonesia. Status badan hukum disahkan melalui Keputusan Menteri Hukum dan Hak Asasi Manusia Republik Indonesia Nomor AHU-0001483.AH.01.07.TAHUN 2024.',
                 'documentUrl' => '/pdf/SK_MOKA.pdf',
             ],
-            'leadership' => $this->leadership(),
-            'pastLeaders' => $this->pastLeaders(),
+            'leadership' => $organization['leadership'],
+            'pastLeaders' => $organization['pastLeaders'],
             'videos' => $videos,
             'emptyState' => 'Konten sedang disiapkan.',
-        ];
-    }
-
-    /**
-     * @return list<array{name: string, position: string, image: string}>
-     */
-    private function leadership(): array
-    {
-        return [
-            ['name' => 'Cecep Safaatul Barkah', 'position' => 'Ketua Dewan Pengawas', 'image' => '/pengurus/Cecep Safaatul Barkah.png'],
-            ['name' => 'Kiki Syarief', 'position' => 'Dewan Pengawas I', 'image' => '/pengurus/Kiki Syarief.png'],
-            ['name' => 'Muhammad Khaerul', 'position' => 'Dewan Pengawas II', 'image' => '/pengurus/Muhammad Khaerul.png'],
-            ['name' => 'Nurman Purnama Gumilar', 'position' => 'Ketua Umum', 'image' => '/pengurus/Nurman Purnama Gumilar.png'],
-            ['name' => 'Salawat Fatih Ibrahim', 'position' => 'Wakil Ketua I', 'image' => '/pengurus/Salawat Fatih Ibrahim.png'],
-            ['name' => 'Yudhan Triyana', 'position' => 'Wakil Ketua II', 'image' => '/pengurus/Yudhan Triyana.png'],
-            ['name' => 'Syahril', 'position' => 'Sekretaris Umum', 'image' => '/pengurus/Syahril.png'],
-            ['name' => 'C Allifiana Fadhilah Jasmine', 'position' => 'Wakil Sekretaris', 'image' => '/pengurus/C Allifiana Fadhilah Jasmine.png'],
-            ['name' => 'Rian Nurdiansyah', 'position' => 'Bendahara Umum', 'image' => '/pengurus/Rian Nurdiansyah.png'],
-            ['name' => 'Zalfa Fadhilah', 'position' => 'Wakil Bendahara', 'image' => '/pengurus/Zalfa Fadhilah.png'],
-            ['name' => 'Moch Adval Ginalingga Darmawan', 'position' => 'Kepala Bidang Penelitian dan Pengembangan', 'image' => '/pengurus/Moch Adval Ginalingga Darmawan.png'],
-            ['name' => 'Gina Listya Nuraini', 'position' => 'Kepala Bidang Pengadaan Sumber Daya Organisasi', 'image' => '/pengurus/Gina Listya Nuraini.png'],
-            ['name' => 'Roby Akhmad Akbari Santoso', 'position' => 'Kepala Bidang Hubungan Masyarakat', 'image' => '/pengurus/Roby Akhmad Akbari Santoso.png'],
-            ['name' => 'Gumilang M Khotib', 'position' => 'Bidang Kreatif dan Media Sosial', 'image' => '/pengurus/Gumilang M Khotib.png'],
-            ['name' => 'Riana Ahsan', 'position' => 'Bidang Kreatif dan Media Sosial', 'image' => '/pengurus/Riana Ahsan.png'],
-            ['name' => 'Mochamad Haiqal Aditia Pratama', 'position' => 'Kepala Bidang Ekonomi Kreatif', 'image' => '/pengurus/Mochamad Haiqal Aditia Pratama.png'],
-        ];
-    }
-
-    /**
-     * @return list<array{name: string, position: string, image: string}>
-     */
-    private function pastLeaders(): array
-    {
-        return [
-            ['name' => 'Cecep Safaatul Barkah', 'position' => '2008-2013', 'image' => '/ketua/Cecep Safaatul Barkah.png'],
-            ['name' => 'Teguh Ramadhan', 'position' => '2013-2016', 'image' => '/ketua/Teguh Ramadhan.png'],
-            ['name' => 'Yesi Haerunisa', 'position' => '2016-2019', 'image' => '/ketua/Yesi Haerunisa.png'],
-            ['name' => 'Isnat Ahmad Zulfaqor', 'position' => '2019-2021', 'image' => '/ketua/Isnat Ahmad Zulfaqor.png'],
-            ['name' => 'Nurman Purnama Gumilar', 'position' => '2021-Sekarang', 'image' => '/ketua/Nurman Purnama Gumilar.png'],
         ];
     }
 }

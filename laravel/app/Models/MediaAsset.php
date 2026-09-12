@@ -45,6 +45,11 @@ class MediaAsset extends Model
         return $this->hasMany(Sponsor::class, 'logo_media_id');
     }
 
+    public function people(): HasMany
+    {
+        return $this->hasMany(Person::class, 'portrait_media_id');
+    }
+
     protected function casts(): array
     {
         return [

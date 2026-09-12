@@ -4,6 +4,7 @@ type Person = {
     name: string
     position: string
     image: string
+    gender: 'L' | 'P'
 }
 
 type Video = {
@@ -183,9 +184,9 @@ function PeopleSection({ title, heading, people, emptyState, alignRight = false 
                 <div className="mt-8 grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                     {people.map((person) => (
                         <article key={`${person.position}-${person.name}`} className="overflow-hidden rounded-xl border border-dgb-100 bg-white shadow-sm">
-                            <img src={person.image} alt={person.name} width="500" height="500" className="aspect-square w-full object-cover" />
+                            <img src={person.image} alt={`${person.name}, ${person.position}`} width="500" height="500" className="aspect-square w-full object-cover" />
                             <div className="grid gap-1 p-4">
-                                <h3 className="font-montserrat font-semibold text-dgb-900">{person.name}</h3>
+                                <h3 className="font-montserrat font-semibold text-dgb-900">{person.gender === 'L' ? 'Kang' : 'Teh'} {person.name}</h3>
                                 <p className="text-sm leading-5 text-dgb-600">{person.position}</p>
                             </div>
                         </article>

@@ -20,6 +20,16 @@ class OrganizationPeriod extends Model
         return $this->hasMany(Edition::class);
     }
 
+    public function units(): HasMany
+    {
+        return $this->hasMany(OrganizationUnit::class);
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(OrganizationMembership::class);
+    }
+
     /**
      * @return array<string, string>
      */
