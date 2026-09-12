@@ -31,6 +31,11 @@ class Person extends Model
         return $this->hasMany(OrganizationMembership::class);
     }
 
+    public function socialLinks(): HasMany
+    {
+        return $this->hasMany(PersonSocialLink::class)->orderBy('display_order')->orderBy('id');
+    }
+
     protected function casts(): array
     {
         return [

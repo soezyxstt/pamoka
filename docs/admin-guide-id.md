@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, dan gelar. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, dan kepengurusan organisasi. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -102,6 +102,8 @@ Menu **Kepengurusan** (`/admin/organization`) mengelola struktur kepengurusan PA
 4. **Direktori Orang Bersama**: Profil orang (nama, bio, media sosial, foto) dapat digunakan kembali untuk kepengurusan berbagai periode maupun kepanitiaan edisi.
 5. **Edisi Terhubung**: Buka detail periode lalu pilih **Atur** pada bagian Edisi terhubung. Satu periode dapat memiliki beberapa edisi. Jika edisi masih terhubung ke periode lain, centang konfirmasi pemindahan sebelum menyimpan.
 6. **Visi dan Misi**: Buka **Edit metadata periode** untuk memperbarui visi serta menambah, menghapus, atau mengurutkan poin misi.
+
+Pada sidecar Laravel, Stage 9E menyediakan workflow periode organisasi, hubungan periode dan edisi dengan konfirmasi pemindahan, direktori orang reusable, tautan sosial HTTPS, portrait dari media gambar siap pakai, tree unit maksimal 4 tingkat, penugasan anggota, dan pemetaan assignment legacy. Semua write memakai permission `people.manage`, transaksi, audit log, dan optimistic version pada entitas yang memiliki versi. Upload media langsung, import database operator, dan cutover publik belum dilakukan.
 
 ---
 
