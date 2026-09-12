@@ -160,13 +160,15 @@ Di dalam album, admin dapat memilih beberapa foto dari Pustaka Media, menambahka
 
 ## 12. Operasional Voting Manual
 
-Menu **Voting** (`/admin/voting`) mengelola kampanye voting kameumeut:
+Menu **Voting** (`/admin/voting`) pada sidecar Laravel mengelola kampanye voting kameumeut untuk edisi aktif:
 1. **Buat Kampanye**: Pilih tahap sumber dari edisi aktif. Tahap final dipilih otomatis bila tersedia.
 2. **Mulai Manual**: Ketik nama kampanye dan alasan. Sistem membekukan daftar peserta tahap sebagai snapshot.
 3. **Siapkan QRIS**: Unggah atau pilih gambar QRIS eksternal pada profil peserta. PDF dan media yang belum siap tidak dapat menerima tally.
 4. **Catat Tally**: Pilih peserta snapshot dan tanggal, lalu masukkan akumulasi pemasukan harian dari dashboard merchant QRIS.
 5. **Tampilkan Hasil**: Ubah visibilitas dengan alasan. Kampanye draf belum dapat ditampilkan.
 6. **Tutup Manual**: Tutup kampanye dengan nama dan alasan. Tally terkunci setelah kampanye ditutup.
+
+Pada Stage 9H, workflow ini sudah tersedia sebagai halaman Inertia React Laravel. Permission `voting.view` diperlukan untuk membaca halaman, `voting.manage` untuk mengatur kampanye dan visibilitas hasil, serta `voting.tally` untuk mencatat nominal harian. Semua perubahan ditulis dalam transaksi dan audit log. Form authoring hanya memakai media QRIS berstatus `ready`; upload media langsung, import database operator, dan cutover publik belum dilakukan.
 
 ---
 

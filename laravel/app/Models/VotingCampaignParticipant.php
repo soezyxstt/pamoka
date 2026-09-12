@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['campaign_id', 'participant_id', 'source_stage_id', 'added_at'])]
 class VotingCampaignParticipant extends Model
 {
+    public $timestamps = false;
+
     public $incrementing = false;
 
     protected $primaryKey = null;
