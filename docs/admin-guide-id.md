@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita pada `/admin/content/news`. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, dan galeri. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -73,9 +73,10 @@ Menu **Aset Situs Tetap** (`/admin/content/site-assets`) mengelola penempatan me
 Menu **Sponsor** (`/admin/content/sponsors`) mengelola partner pendukung acara:
 1. **Tingkatan Tier**: Kelola sponsor berdasarkan kategori (`Utama`, `Pendukung`, `Pendamping`, `Pelengkap`).
 2. **Pencarian & Filter**: Saring berdasarkan nama, tier, atau status aktif/nonaktif.
-3. **Logo & Pratinjau**: Pilih logo sponsor dan lihat simulasi kartu mini secara live.
+3. **Logo**: Pilih logo sponsor dari aset gambar berstatus siap. Upload langsung dari form authoring Laravel belum tersedia.
 4. **Urutan Tampil**: Atur nomor urut penampilan (display order) untuk menentukan posisi di situs publik.
-5. **Penerbitan**: Sponsor baru selalu disimpan nonaktif. Pengguna dengan izin penerbitan dapat mengaktifkannya setelah data diperiksa.
+5. **Penerbitan**: Sponsor baru selalu disimpan nonaktif. Pengguna dengan `content.publish` dapat mengaktifkannya setelah data diperiksa.
+6. **Versi dan audit**: Perubahan dibatasi ke edisi aktif, diperiksa dengan `version`, dan dicatat pada audit log.
 
 ---
 
@@ -138,12 +139,14 @@ Menu **Mojang Jajaka** (`/admin/content/participants`) mengelola peserta Pasangg
 
 Menu **Rangkaian acara** (`/admin/content/events`) mengelola nama, slug, deskripsi, foto hero, status, dan urutan acara pada edisi aktif. Buka detail acara untuk melihat album terkait atau membuat album baru yang langsung terhubung.
 
+Pada sidecar Laravel, perubahan acara memerlukan `events.manage`, foto hero hanya dapat memakai aset gambar siap, dan tombol panah menyimpan urutan secara transaksional.
+
 Menu **Galeri** (`/admin/content/galleries`) menyediakan dua tipe album:
 
 1. **Umum**: album tidak terkait acara.
 2. **Terkait acara**: album hanya dapat memilih acara dari edisi aktif.
 
-Di dalam album, admin dapat memilih beberapa foto dari Pustaka Media, menambahkan video YouTube, mengubah keterangan, dan mengatur urutan. Setiap item hanya memiliki satu sumber. Pratinjau menampilkan indeks album dan susunan medianya.
+Di dalam album, admin dapat memilih beberapa foto dari Pustaka Media, menambahkan video YouTube, mengubah keterangan, dan mengatur urutan. Setiap item hanya memiliki satu sumber. Authoring Laravel memerlukan `gallery.manage`, menjaga owner tetap pada edisi aktif, dan mencatat perubahan item pada audit log. Upload media, preview split, serta pratinjau penuh masih mengikuti workflow Next.js sampai slice berikutnya selesai.
 
 ---
 

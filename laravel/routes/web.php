@@ -2,8 +2,11 @@
 
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminEditionContextController;
+use App\Http\Controllers\AdminEventsController;
+use App\Http\Controllers\AdminGalleriesController;
 use App\Http\Controllers\AdminNewsController;
 use App\Http\Controllers\AdminRequestAccessController;
+use App\Http\Controllers\AdminSponsorsController;
 use App\Http\Controllers\AdminUsersController;
 use App\Http\Controllers\Auth\GoogleAuthenticationController;
 use App\Http\Controllers\HomeController;
@@ -31,6 +34,30 @@ Route::post('/admin/content/news/{id}/publish', [AdminNewsController::class, 'pu
 Route::post('/admin/content/news/{id}/unpublish', [AdminNewsController::class, 'unpublish'])->middleware(EnsureAdminAccess::class)->name('admin.news.unpublish');
 Route::post('/admin/content/news/{id}/archive', [AdminNewsController::class, 'archive'])->middleware(EnsureAdminAccess::class)->name('admin.news.archive');
 Route::delete('/admin/content/news/{id}', [AdminNewsController::class, 'destroy'])->middleware(EnsureAdminAccess::class)->name('admin.news.destroy');
+Route::get('/admin/content/sponsors', [AdminSponsorsController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.index');
+Route::get('/admin/content/sponsors/new', [AdminSponsorsController::class, 'create'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.create');
+Route::post('/admin/content/sponsors', [AdminSponsorsController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.store');
+Route::get('/admin/content/sponsors/{id}', [AdminSponsorsController::class, 'edit'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.edit');
+Route::put('/admin/content/sponsors/{id}', [AdminSponsorsController::class, 'update'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.update');
+Route::post('/admin/content/sponsors/{id}/toggle', [AdminSponsorsController::class, 'toggle'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.toggle');
+Route::delete('/admin/content/sponsors/{id}', [AdminSponsorsController::class, 'destroy'])->middleware(EnsureAdminAccess::class)->name('admin.sponsors.destroy');
+Route::get('/admin/content/events', [AdminEventsController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.events.index');
+Route::get('/admin/content/events/new', [AdminEventsController::class, 'create'])->middleware(EnsureAdminAccess::class)->name('admin.events.create');
+Route::post('/admin/content/events', [AdminEventsController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.events.store');
+Route::get('/admin/content/events/{id}', [AdminEventsController::class, 'edit'])->middleware(EnsureAdminAccess::class)->name('admin.events.edit');
+Route::put('/admin/content/events/{id}', [AdminEventsController::class, 'update'])->middleware(EnsureAdminAccess::class)->name('admin.events.update');
+Route::post('/admin/content/events/reorder', [AdminEventsController::class, 'reorder'])->middleware(EnsureAdminAccess::class)->name('admin.events.reorder');
+Route::delete('/admin/content/events/{id}', [AdminEventsController::class, 'destroy'])->middleware(EnsureAdminAccess::class)->name('admin.events.destroy');
+Route::get('/admin/content/galleries', [AdminGalleriesController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.index');
+Route::get('/admin/content/galleries/new', [AdminGalleriesController::class, 'create'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.create');
+Route::post('/admin/content/galleries', [AdminGalleriesController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.store');
+Route::get('/admin/content/galleries/{id}', [AdminGalleriesController::class, 'edit'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.edit');
+Route::put('/admin/content/galleries/{id}', [AdminGalleriesController::class, 'update'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.update');
+Route::post('/admin/content/galleries/{id}/items', [AdminGalleriesController::class, 'addItems'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.items.add');
+Route::put('/admin/content/galleries/{galleryId}/items/{itemId}', [AdminGalleriesController::class, 'updateItem'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.items.update');
+Route::delete('/admin/content/galleries/{galleryId}/items/{itemId}', [AdminGalleriesController::class, 'deleteItem'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.items.delete');
+Route::post('/admin/content/galleries/{id}/items/reorder', [AdminGalleriesController::class, 'reorderItems'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.items.reorder');
+Route::delete('/admin/content/galleries/{id}', [AdminGalleriesController::class, 'destroy'])->middleware(EnsureAdminAccess::class)->name('admin.galleries.destroy');
 Route::get('/admin', AdminDashboardController::class)->middleware(EnsureAdminAccess::class)->name('admin.dashboard');
 Route::get('/monitor', [PublicPageController::class, 'monitor'])->middleware(EnsureAdminAccess::class)->name('admin.monitor');
 
