@@ -28,7 +28,7 @@ export default function Contact({ meta, faqs, email, socials }: Props) {
             </Head>
 
             <main className="relative min-h-screen overflow-hidden bg-dgb-50 px-5 py-16 sm:px-8 md:px-20 md:py-24">
-                <div className="absolute inset-0 bg-[url('/babancong.webp')] bg-cover bg-center opacity-10" />
+                <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: 'url("/babancong.webp")' }} />
                 <section className="relative mx-auto grid max-w-7xl gap-12 md:grid-cols-[1fr_0.8fr] md:gap-20">
                     <div>
                         <p className="font-montserrat text-sm font-bold uppercase tracking-[0.18em] text-fb-500">Kontak</p>
