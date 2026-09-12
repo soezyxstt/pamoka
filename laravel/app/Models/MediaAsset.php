@@ -50,6 +50,11 @@ class MediaAsset extends Model
         return $this->hasMany(Person::class, 'portrait_media_id');
     }
 
+    public function qrisParticipants(): HasMany
+    {
+        return $this->hasMany(Participant::class, 'qris_media_id');
+    }
+
     protected function casts(): array
     {
         return [

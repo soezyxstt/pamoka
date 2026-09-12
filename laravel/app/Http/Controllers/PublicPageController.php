@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PermissionKey;
+use App\Services\AuthorizationService;
 use App\Services\PublicCoreContent;
 use App\Services\PublicEventCatalog;
 use App\Services\PublicGalleryCatalog;
@@ -9,6 +11,9 @@ use App\Services\PublicNewsCatalog;
 use App\Services\PublicOrganizationCatalog;
 use App\Services\PublicParticipantCatalog;
 use App\Services\PublicSponsorCatalog;
+use App\Services\PublicVotingCatalog;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -63,22 +68,43 @@ class PublicPageController extends Controller
         return $this->renderParticipantDetail($catalog, $category, $name, PublicParticipantCatalog::SEMIFINAL_STAGE, 'semifinalists');
     }
 
-    public function voting(string $category): Response
+    public function voting(string $category, PublicVotingCatalog $catalog): Response
     {
-        return $this->renderPlaceholder('voting.index', 'Voting', ['category' => $category]);
+        $data = $catalog->listing($category);
+
+        abort_if($data === null, 404, 'Kategori voting tidak ditemukan.');
+
+        return Inertia::render('Public/Voting/Index', $data);
     }
 
-    public function votingCandidate(string $category, string $name): Response
+    public function votingCandidate(string $category, string $name, PublicVotingCatalog $catalog): Response
     {
-        return $this->renderPlaceholder('voting.show', 'Voting', [
-            'category' => $category,
-            'name' => $name,
-        ]);
+        $data = $catalog->detail($category, $name);
+
+        abort_if($data === null, 404, 'Kandidat voting tidak ditemukan.');
+
+        return Inertia::render('Public/Voting/Show', $data);
     }
 
-    public function votingResults(string $category): Response
+    public function votingResults(string $category, PublicVotingCatalog $catalog): Response
     {
-        return $this->renderPlaceholder('voting.results', 'Hasil voting', ['category' => $category]);
+        $data = $catalog->results($category);
+
+        abort_if($data === null, 404, 'Kategori hasil voting tidak ditemukan.');
+
+        return Inertia::render('Public/Voting/Results', $data);
+    }
+
+    public function monitor(
+        Request $request,
+        PublicVotingCatalog $catalog,
+        AuthorizationService $authorization,
+    ): Response|RedirectResponse {
+        if (! $authorization->has($request->user(), PermissionKey::VotingView->value)) {
+            return to_route('admin.request-access');
+        }
+
+        return Inertia::render('Admin/Monitor', $catalog->monitor());
     }
 
     /**

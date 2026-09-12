@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "sourceFiles": [
+    "src/app/voting/[category]/page.tsx",
+    "src/app/voting/[category]/[name]/page.tsx",
+    "src/app/voting/hasil/[category]/action.ts",
+    "src/server/db/seed.ts"
+  ],
+  "participantFixture": "database/fixtures/participants-2025.json",
+  "edition": {
+    "year": 2025,
+    "slug": "2025",
+    "name": "Pasanggiri Mojang Jajaka Garut 2025",
+    "timezone": "Asia/Jakarta"
+  },
+  "campaign": {
+    "name": "Voting Kameumeut 2025",
+    "slug": "voting-kameumeut-2025",
+    "timezone": "Asia/Jakarta",
+    "startsAt": "2025-07-28T00:00:00+07:00",
+    "endsAt": "2025-08-09T23:59:59+07:00",
+    "startedAt": "2025-07-28T00:00:00+07:00",
+    "closedAt": "2025-08-09T23:59:59+07:00",
+    "status": "closed",
+    "pricePerPoint": 2000,
+    "resultVisibility": "hidden"
+  },
+  "candidateStage": "final",
+  "qrisRoot": "/qr",
+  "qrisNaming": "name_underscores",
+  "tallyDates": [
+    "2025-07-28",
+    "2025-07-29",
+    "2025-07-30",
+    "2025-07-31",
+    "2025-08-01",
+    "2025-08-02",
+    "2025-08-03",
+    "2025-08-04",
+    "2025-08-05",
+    "2025-08-06",
+    "2025-08-07",
+    "2025-08-08",
+    "2025-08-09"
+  ],
+  "tallyAmount": 0,
+  "notes": [
+    "Campaign target adalah read model historis dari copy publik 2025, karena source tidak memiliki campaign modern yang terisi.",
+    "Tally nol mengikuti seed IncomePerDate source dan tidak mengarang jumlah dukungan.",
+    "QR voting memakai aset publik lokal dengan pola nama peserta underscore."
+  ]
+}

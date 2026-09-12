@@ -22,6 +22,7 @@ Route::post('/admin/context/edition', [AdminEditionContextController::class, 'st
 Route::get('/admin/users', [AdminUsersController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.users');
 Route::post('/admin/users/access-requests/{accessRequest}/approve', [AdminUsersController::class, 'approve'])->middleware(EnsureAdminAccess::class)->name('admin.access-requests.approve');
 Route::get('/admin', AdminDashboardController::class)->middleware(EnsureAdminAccess::class)->name('admin.dashboard');
+Route::get('/monitor', [PublicPageController::class, 'monitor'])->middleware(EnsureAdminAccess::class)->name('admin.monitor');
 
 Route::get('/tentang', [PublicPageController::class, 'about'])->name('public.about');
 Route::get('/berita/{slug}', [PublicPageController::class, 'news'])

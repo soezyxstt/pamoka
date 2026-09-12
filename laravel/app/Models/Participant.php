@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['edition_id', 'category_id', 'stage', 'current_stage_id', 'selection_status', 'number', 'name', 'slug', 'bio', 'payment_url', 'display_order', 'active', 'version'])]
+#[Fillable(['edition_id', 'category_id', 'stage', 'current_stage_id', 'selection_status', 'number', 'name', 'slug', 'bio', 'payment_url', 'qris_media_id', 'display_order', 'active', 'version'])]
 class Participant extends Model
 {
     /** @use HasFactory<ParticipantFactory> */
@@ -45,6 +45,11 @@ class Participant extends Model
     public function media(): HasMany
     {
         return $this->hasMany(ParticipantMedia::class)->orderBy('display_order')->orderBy('id');
+    }
+
+    public function qrisMedia(): BelongsTo
+    {
+        return $this->belongsTo(MediaAsset::class, 'qris_media_id');
     }
 
     public function stageEntries(): HasMany

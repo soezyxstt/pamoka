@@ -31,6 +31,7 @@ class ParticipantFactory extends Factory
             'slug' => Str::slug($name),
             'bio' => fake()->sentence(),
             'payment_url' => null,
+            'qris_media_id' => null,
             'display_order' => 0,
             'active' => true,
             'version' => 1,

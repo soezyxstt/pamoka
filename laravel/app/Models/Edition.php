@@ -66,6 +66,11 @@ class Edition extends Model
         return $this->hasMany(OrganizationAssignment::class);
     }
 
+    public function votingCampaigns(): HasMany
+    {
+        return $this->hasMany(VotingCampaign::class);
+    }
+
     /**
      * @return array<string, string>
      */

@@ -31,6 +31,16 @@ class SelectionStage extends Model
         return $this->hasMany(ParticipantStageEntry::class, 'stage_id');
     }
 
+    public function votingCampaigns(): HasMany
+    {
+        return $this->hasMany(VotingCampaign::class, 'eligibility_stage_id');
+    }
+
+    public function votingCampaignParticipants(): HasMany
+    {
+        return $this->hasMany(VotingCampaignParticipant::class, 'source_stage_id');
+    }
+
     /**
      * @return array<string, string>
      */
