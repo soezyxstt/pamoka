@@ -46,6 +46,21 @@ class Edition extends Model
         return $this->hasMany(NewsArticle::class);
     }
 
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class);
+    }
+
+    public function galleries(): HasMany
+    {
+        return $this->hasMany(Gallery::class);
+    }
+
+    public function sponsors(): HasMany
+    {
+        return $this->hasMany(Sponsor::class);
+    }
+
     /**
      * @return array<string, string>
      */

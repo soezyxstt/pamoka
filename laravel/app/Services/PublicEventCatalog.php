@@ -2,6 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Edition;
+use App\Models\Event;
+use Illuminate\Support\Facades\Schema;
+
 final class PublicEventCatalog
 {
     /**
@@ -35,88 +39,59 @@ final class PublicEventCatalog
     ];
 
     /**
-     * @var list<string>
-     */
-    private const SPONSORS = [
-        'Abie Kebaya.png',
-        'ADAWY.png',
-        'Adho Wedding.png',
-        'ARFAZ.png',
-        'art by kiki syarief.png',
-        'ASKARA WEDDING.png',
-        'ASTIGA.png',
-        'BALDY.png',
-        'BANK BJB.png',
-        'BASO ACI ACAY.png',
-        'BNI.png',
-        'CASANDRA.png',
-        'CHOCODOT.png',
-        'COKUSI.png',
-        'COLLEGA.png',
-        'CORELLIA.png',
-        'DANNY DECOR.png',
-        'DARMAYANTI.png',
-        'DODOL PICNIC.png',
-        'ELLEANORS.png',
-        'ETERNALS.png',
-        'EZHAR.png',
-        'FASHIONAJA.png',
-        'FITRI SIFO.png',
-        'GOAH GUMELAR.png',
-        'GRAHA WEDDING.png',
-        'GRISELLA MAKE UP.png',
-        'GULA PADI.png',
-        'happybooth.id.png',
-        'HARMONI.png',
-        'HENDY SAMUDRO.png',
-        'Historia.png',
-        'Imamsyah Wedding.png',
-        'IPANG MAKE UP.png',
-        'JANDIKA WEDDING.png',
-        'JM GROUP.png',
-        'judit.png',
-        'KHOLIK MAHENDRA.png',
-        'KINAYUNG FLORIST.png',
-        'LARIN.png',
-        'LAVIOSA.png',
-        'LED BANDUNG.png',
-        'MAHESWARY MANAGEMENT.png',
-        'MAHOGANY.png',
-        'MASAGI OUTBOUND.png',
-        'MAXIMUSA.png',
-        'MINI COFFEE.png',
-        'MONNIQUIN.png',
-        'Nissin.png',
-        'nyentrik CLear.png',
-        'ONIE RONNIE.png',
-        'PDAM.png',
-        'PRIMARY ENGLISH.png',
-        'RATTU WEDDING.png',
-        'RESTORASA.png',
-        'REVIE.png',
-        'RHEKZA.png',
-        'SALMA NONON.png',
-        'SAWARGI PHOTOBOOTH.png',
-        'SHYMPHONY.png',
-        'SOPIK PERMANA.png',
-        'SYAR_I BEAUTY CARE .png',
-        'TOKO MAS SINAR MT.png',
-        'UDENDI.png',
-        'UDIL KUDIL.png',
-        'Uniga.png',
-        'VIRERA ALAM SUTRA.png',
-        'Visual Space.png',
-    ];
-
-    /**
+     * @param  list<array{name: string, image: string}>|null  $sponsors
      * @return array<string, mixed>|null
      */
-    public function detail(string $slug): ?array
+    public function detail(string $slug, ?array $sponsors = null): ?array
     {
-        $event = self::EVENTS[$slug] ?? null;
+        $eventDefinition = self::EVENTS[$slug] ?? null;
 
-        if ($event === null) {
+        if ($eventDefinition === null) {
             return null;
+        }
+
+        $sponsors ??= PublicSponsorCatalog::snapshot();
+        $edition = $this->activeEdition();
+
+        if ($edition !== null && $this->publicMediaTablesExist()) {
+            $event = Event::query()
+                ->with(['heroMedia', 'galleries.items.mediaAsset'])
+                ->where('edition_id', $edition->id)
+                ->where('slug', $slug)
+                ->where('active', true)
+                ->first();
+
+            if ($event !== null) {
+                $images = $event->galleries
+                    ->filter(fn ($gallery): bool => $gallery->status === 'published' && $gallery->active)
+                    ->flatMap(fn ($gallery) => $gallery->items)
+                    ->filter(fn ($item): bool => $item->active
+                        && $item->mediaAsset !== null
+                        && $item->mediaAsset->lifecycle === 'ready')
+                    ->map(fn ($item): string => $item->mediaAsset->url)
+                    ->values()
+                    ->all();
+
+                if ($images === [] && $event->heroMedia?->lifecycle === 'ready') {
+                    $images = [$event->heroMedia->url];
+                }
+
+                return [
+                    'meta' => [
+                        'title' => "{$event->label} | Rangkaian Kegiatan | MOKA Garut",
+                        'description' => "Dokumentasi {$event->label} pada rangkaian Pasanggiri Mojang Jajaka Kabupaten Garut {$edition->year}.",
+                    ],
+                    'pageTitle' => $event->label,
+                    'event' => [
+                        'slug' => $event->slug,
+                        'label' => $event->label,
+                        'description' => $event->description ?? $eventDefinition['description'],
+                        'images' => $images,
+                    ],
+                    'sponsors' => $sponsors,
+                    'emptyState' => 'Dokumentasi kegiatan sedang disiapkan.',
+                ];
+            }
         }
 
         $images = array_map(
@@ -124,28 +99,36 @@ final class PublicEventCatalog
             range(1, 10),
         );
 
-        $sponsors = array_map(
-            static fn (string $filename): array => [
-                'name' => pathinfo($filename, PATHINFO_FILENAME),
-                'image' => "/sponsors/{$filename}",
-            ],
-            self::SPONSORS,
-        );
-
         return [
             'meta' => [
-                'title' => "{$event['label']} | Rangkaian Kegiatan | MOKA Garut",
-                'description' => "Dokumentasi {$event['label']} pada rangkaian Pasanggiri Mojang Jajaka Kabupaten Garut 2025.",
+                'title' => "{$eventDefinition['label']} | Rangkaian Kegiatan | MOKA Garut",
+                'description' => "Dokumentasi {$eventDefinition['label']} pada rangkaian Pasanggiri Mojang Jajaka Kabupaten Garut 2025.",
             ],
-            'pageTitle' => $event['label'],
+            'pageTitle' => $eventDefinition['label'],
             'event' => [
                 'slug' => $slug,
-                'label' => $event['label'],
-                'description' => $event['description'],
+                'label' => $eventDefinition['label'],
+                'description' => $eventDefinition['description'],
                 'images' => $images,
             ],
             'sponsors' => $sponsors,
             'emptyState' => 'Dokumentasi kegiatan sedang disiapkan.',
         ];
+    }
+
+    private function activeEdition(): ?Edition
+    {
+        return Edition::query()
+            ->where('lifecycle', 'active')
+            ->orderByDesc('year')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function publicMediaTablesExist(): bool
+    {
+        return Schema::hasTable('events')
+            && Schema::hasTable('galleries')
+            && Schema::hasTable('gallery_items');
     }
 }

@@ -50,9 +50,10 @@ final class PublicCoreContent
     }
 
     /**
+     * @param  list<array{id: string, title: string}>  $videos
      * @return array<string, mixed>
      */
-    public function about(): array
+    public function about(array $videos = []): array
     {
         return [
             'meta' => [
@@ -82,17 +83,7 @@ final class PublicCoreContent
             ],
             'leadership' => $this->leadership(),
             'pastLeaders' => $this->pastLeaders(),
-            'videos' => [
-                ['id' => '5w0ORZ0XUkE', 'title' => 'Video kegiatan PAMOKA 1'],
-                ['id' => 'PEx2wVwReX4', 'title' => 'Video kegiatan PAMOKA 2'],
-                ['id' => 'Str4439U-OM', 'title' => 'Video kegiatan PAMOKA 3'],
-                ['id' => 'f6rmvU8o6CI', 'title' => 'Video kegiatan PAMOKA 4'],
-                ['id' => 'I-R_T7cULcI', 'title' => 'Video kegiatan PAMOKA 5'],
-                ['id' => '05GxYCSbhg4', 'title' => 'Video kegiatan PAMOKA 6'],
-                ['id' => 'qG8qy-QUxKY', 'title' => 'Video kegiatan PAMOKA 7'],
-                ['id' => 'pWTQEm_gCaY', 'title' => 'Video kegiatan PAMOKA 8'],
-                ['id' => 'S4NanSPqf00', 'title' => 'Video kegiatan PAMOKA 9'],
-            ],
+            'videos' => $videos,
             'emptyState' => 'Konten sedang disiapkan.',
         ];
     }

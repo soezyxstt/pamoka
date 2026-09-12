@@ -4,20 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Services\PublicCoreContent;
 use App\Services\PublicEventCatalog;
+use App\Services\PublicGalleryCatalog;
 use App\Services\PublicParticipantCatalog;
+use App\Services\PublicSponsorCatalog;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PublicPageController extends Controller
 {
-    public function about(PublicCoreContent $content): Response
+    public function about(PublicCoreContent $content, PublicGalleryCatalog $gallery): Response
     {
-        return Inertia::render('Public/About', $content->about());
+        return Inertia::render('Public/About', $content->about($gallery->aboutVideos()));
     }
 
-    public function event(string $event, PublicEventCatalog $catalog): Response
+    public function event(string $event, PublicEventCatalog $catalog, PublicSponsorCatalog $sponsors): Response
     {
-        $data = $catalog->detail($event);
+        $data = $catalog->detail($event, $sponsors->featured());
 
         abort_if($data === null, 404, 'Kegiatan tidak ditemukan.');
 
