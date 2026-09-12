@@ -24,7 +24,7 @@ class AdminContentController extends Controller
             'user' => $this->presentUser($request),
             'edition' => $edition,
             'modules' => [
-                ['slug' => 'editions', 'label' => 'Kelola edisi', 'description' => 'Periode, kategori, dan status edisi.', 'href' => '/admin/content/editions', 'available' => false],
+                ['slug' => 'editions', 'label' => 'Kelola edisi', 'description' => 'Periode, kategori, dan status edisi.', 'href' => '/admin/content/editions', 'available' => true],
                 ['slug' => 'edition-settings', 'label' => 'Identitas edisi', 'description' => 'Logo, slogan, dan program unggulan.', 'href' => '/admin/content/edition-settings', 'available' => true],
                 ['slug' => 'site-assets', 'label' => 'Aset situs', 'description' => 'Gambar untuk bagian situs yang tetap.', 'href' => '/admin/content/site-assets', 'available' => true],
                 ['slug' => 'news', 'label' => 'Berita', 'description' => 'Artikel, pratinjau, dan publikasi.', 'href' => '/admin/content/news', 'available' => true],

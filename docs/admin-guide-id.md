@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, panitia, identitas edisi, program unggulan, aset situs, operasi voting, dan pustaka media. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, serta slice authoring berita, sponsor, acara, galeri, peserta, tahap seleksi, gelar, kepengurusan organisasi, panitia, edisi, kategori, identitas edisi, program unggulan, aset situs, operasi voting, dan pustaka media. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -190,3 +190,13 @@ Menu **Audit** (`/admin/audit`):
 3. Menjamin transparansi dan akuntabilitas penuh pada seluruh data CMS dan operasional voting.
 
 Pada sidecar Laravel, halaman `/admin/audit` menampilkan 100 aktivitas terbaru dan hanya dapat dibaca dengan permission `audit.view`. Profil `/admin/profile` menampilkan status akun, role, dan izin efektif; pengguna pending tetap dapat melihat identitasnya tanpa memperoleh akses ke modul admin. Ikhtisar `/admin/content` menjadi pintu masuk modul konten yang sudah tersedia, sementara `/admin/content/pages` dan `/admin/content/people` mempertahankan redirect ke pengganti Laravel.
+
+## 15. Edisi & Kategori
+
+Menu **Kelola Edisi** (`/admin/content/editions`) mengelola taxonomy dasar PAMOKA:
+1. **Draft edisi**: Buat periode baru dengan tahun unik. Edisi baru selalu berstatus draft.
+2. **Kategori**: Tambahkan kode `JD`, `MD`, `JR`, atau `MR` ke edisi, beserta slug dan label unik dalam edisi tersebut.
+3. **Aktivasi**: Edisi hanya dapat diaktifkan jika memiliki minimal satu kategori. Alasan aktivasi wajib diisi, dan edisi aktif sebelumnya diarsipkan.
+4. **Permission**: Membaca halaman membutuhkan `content.view`, membuat atau mengaktifkan edisi membutuhkan `settings.manage`, sedangkan menambah kategori membutuhkan `participants.manage`.
+
+Pada sidecar Laravel, seluruh perubahan taxonomy dicatat dalam audit log dan berlangsung dalam transaksi database. Route dan halaman ini sudah diuji pada database MySQL test terisolasi; import data operator dan cutover publik belum dilakukan.

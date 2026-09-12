@@ -1,13 +1,14 @@
 <?php
 
+use App\Http\Controllers\AdminAuditController;
 use App\Http\Controllers\AdminCommitteeController;
 use App\Http\Controllers\AdminContentController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminEditionContextController;
+use App\Http\Controllers\AdminEditionController;
 use App\Http\Controllers\AdminEditionSettingsController;
 use App\Http\Controllers\AdminEventsController;
 use App\Http\Controllers\AdminGalleriesController;
-use App\Http\Controllers\AdminAuditController;
 use App\Http\Controllers\AdminMediaController;
 use App\Http\Controllers\AdminNewsController;
 use App\Http\Controllers\AdminOrganizationController;
@@ -41,6 +42,10 @@ Route::get('/admin/audit', AdminAuditController::class)->middleware(EnsureAdminA
 Route::get('/admin/content', [AdminContentController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.content.index');
 Route::get('/admin/content/pages', fn () => redirect()->route('admin.site-assets.index'))->middleware(EnsureAdminAccess::class)->name('admin.content.pages');
 Route::get('/admin/content/people', fn () => redirect()->route('admin.organization.index'))->middleware(EnsureAdminAccess::class)->name('admin.content.people');
+Route::get('/admin/content/editions', [AdminEditionController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.editions.index');
+Route::post('/admin/content/editions', [AdminEditionController::class, 'store'])->middleware(EnsureAdminAccess::class)->name('admin.editions.store');
+Route::post('/admin/content/editions/categories', [AdminEditionController::class, 'storeCategory'])->middleware(EnsureAdminAccess::class)->name('admin.editions.categories.store');
+Route::post('/admin/content/editions/{id}/activate', [AdminEditionController::class, 'activate'])->middleware(EnsureAdminAccess::class)->name('admin.editions.activate');
 Route::get('/admin/content/edition-settings', [AdminEditionSettingsController::class, 'index'])->middleware(EnsureAdminAccess::class)->name('admin.edition-settings.index');
 Route::put('/admin/content/edition-settings', [AdminEditionSettingsController::class, 'update'])->middleware(EnsureAdminAccess::class)->name('admin.edition-settings.update');
 Route::post('/admin/content/edition-settings/programs', [AdminEditionSettingsController::class, 'storeProgram'])->middleware(EnsureAdminAccess::class)->name('admin.edition-settings.programs.store');
