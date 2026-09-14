@@ -42,6 +42,7 @@ RUN mkdir -p \
         storage/framework/views \
         storage/logs \
     && rm -f bootstrap/cache/*.php \
+    && rm -f public/hot \
     && php artisan package:discover --ansi \
     && chown -R www-data:www-data bootstrap/cache storage
 

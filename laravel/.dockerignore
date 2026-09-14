@@ -5,6 +5,7 @@
 node_modules
 vendor
 public/build
+public/hot
 bootstrap/cache/*.php
 database/*.sqlite
 storage/app/*

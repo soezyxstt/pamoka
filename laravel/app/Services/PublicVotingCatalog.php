@@ -23,6 +23,22 @@ final class PublicVotingCatalog
         'mojang-rumaja' => ['code' => 'MR', 'label' => 'Mojang Rumaja'],
     ];
 
+    /**
+     * @var array{name: string, slug: string, timezone: string, startsAt: string, endsAt: string, startedAt: string, closedAt: string, status: string, pricePerPoint: int, resultVisibility: string}
+     */
+    private const SNAPSHOT_CAMPAIGN = [
+        'name' => 'Voting Kameumeut 2025',
+        'slug' => 'voting-kameumeut-2025',
+        'timezone' => 'Asia/Jakarta',
+        'startsAt' => '2025-07-28T00:00:00+07:00',
+        'endsAt' => '2025-08-09T23:59:59+07:00',
+        'startedAt' => '2025-07-28T00:00:00+07:00',
+        'closedAt' => '2025-08-09T23:59:59+07:00',
+        'status' => 'closed',
+        'pricePerPoint' => 2000,
+        'resultVisibility' => 'hidden',
+    ];
+
     public function __construct(private readonly PublicParticipantCatalog $participants) {}
 
     /**
@@ -44,6 +60,9 @@ final class PublicVotingCatalog
 
         $edition = $this->activeEdition();
         $campaign = $this->publicCampaign($edition);
+        $campaignPayload = $campaign !== null
+            ? $this->campaignPayload($campaign)
+            : $this->snapshotCampaign($participantListing['edition'] ?? null);
         $participantRows = $participantListing['participants'];
 
         if ($campaign !== null && $edition !== null) {
@@ -54,9 +73,7 @@ final class PublicVotingCatalog
             ));
         }
 
-        $qrisBySlug = $edition !== null
-            ? $this->qrisBySlug($edition, $categorySlug, $participantRows, $categoryDefinition['code'])
-            : [];
+        $qrisBySlug = $this->qrisBySlug($edition, $categorySlug, $participantRows, $categoryDefinition['code']);
 
         $participantRows = array_map(
             static function (array $participant) use ($qrisBySlug): array {
@@ -83,16 +100,16 @@ final class PublicVotingCatalog
                 'slug' => $categorySlug,
             ],
             'categories' => $this->categoryOptions(),
-            'campaign' => $campaign === null ? null : $this->campaignPayload($campaign),
+            'campaign' => $campaignPayload,
             'participants' => $participantRows,
             'voting' => [
-                'available' => $campaign !== null,
+                'available' => $campaignPayload !== null,
                 'open' => $campaign !== null && $this->campaignIsOpen($campaign),
-                'pricePerPoint' => $campaign?->price_per_point,
+                'pricePerPoint' => $campaign?->price_per_point ?? $campaignPayload['pricePerPoint'] ?? null,
             ],
             'candidatePath' => "/voting/{$categorySlug}",
             'resultPath' => "/voting/hasil/{$categorySlug}",
-            'emptyState' => $campaign === null
+            'emptyState' => $campaignPayload === null
                 ? 'Belum ada kampanye voting yang dipublikasikan untuk edisi ini.'
                 : 'Belum ada finalis yang terhubung ke kampanye voting ini.',
         ];
@@ -137,6 +154,9 @@ final class PublicVotingCatalog
 
         $edition = $this->activeEdition();
         $campaign = $this->publicCampaign($edition);
+        $campaignPayload = $campaign !== null
+            ? $this->campaignPayload($campaign)
+            : $this->snapshotCampaign($listing['edition'] ?? null);
         $published = $campaign !== null && $campaign->result_visibility === 'visible';
         $amountByParticipant = [];
 
@@ -161,7 +181,7 @@ final class PublicVotingCatalog
             }
         }
 
-        $participantIdsBySlug = $edition !== null && $campaign !== null
+        $participantIdsBySlug = $published && $edition !== null && $campaign !== null
             ? $this->campaignParticipantIds($campaign, $edition, $categorySlug, array_column($listing['participants'], 'slug'))
             : [];
         $totalAmount = array_sum($amountByParticipant);
@@ -203,7 +223,7 @@ final class PublicVotingCatalog
             'edition' => $listing['edition'],
             'category' => $category,
             'categories' => $listing['categories'],
-            'campaign' => $listing['campaign'],
+            'campaign' => $campaignPayload,
             'results' => $results,
             'hasPublishedResults' => $hasPublishedResults,
             'summary' => [
@@ -334,7 +354,7 @@ final class PublicVotingCatalog
      * @param  list<array<string, mixed>>  $participantRows
      * @return array<string, string>
      */
-    private function qrisBySlug(Edition $edition, string $categorySlug, array $participantRows, string $categoryCode): array
+    private function qrisBySlug(?Edition $edition, string $categorySlug, array $participantRows, string $categoryCode): array
     {
         $slugs = array_values(array_filter(array_column($participantRows, 'slug'), 'is_string'));
         if ($slugs === []) {
@@ -342,7 +362,7 @@ final class PublicVotingCatalog
         }
 
         $mediaBySlug = [];
-        if (Schema::hasColumn('participants', 'qris_media_id')) {
+        if ($edition !== null && Schema::hasColumn('participants', 'qris_media_id')) {
             $mediaBySlug = Participant::query()
                 ->with('qrisMedia')
                 ->where('edition_id', $edition->id)
@@ -471,6 +491,24 @@ final class PublicVotingCatalog
         $words = preg_split('/\s+/', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         return implode(' ', array_slice($words, 0, 2));
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $edition
+     * @return array<string, mixed>|null
+     */
+    private function snapshotCampaign(?array $edition): ?array
+    {
+        if ((int) ($edition['year'] ?? 0) !== 2025) {
+            return null;
+        }
+
+        return [
+            'id' => 'snapshot-'.self::SNAPSHOT_CAMPAIGN['slug'],
+            ...self::SNAPSHOT_CAMPAIGN,
+            'statusLabel' => 'Ditutup',
+            'open' => false,
+        ];
     }
 
     private function votingTablesExist(): bool

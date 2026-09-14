@@ -15,7 +15,10 @@ class PublicRouteContractTest extends TestCase
         $indexResponse->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Public/Voting/Index')
             ->where('category.slug', 'mojang-dewasa')
-            ->has('participants', 0)
+            ->where('edition.year', 2025)
+            ->where('campaign.slug', 'voting-kameumeut-2025')
+            ->has('participants', 11)
+            ->where('participants.0.slug', 'tiara-febrianti')
         );
 
         $resultsResponse = $this->get(route('public.voting.results', ['category' => 'mojang-dewasa']));
@@ -25,7 +28,19 @@ class PublicRouteContractTest extends TestCase
             ->component('Public/Voting/Results')
             ->where('category.slug', 'mojang-dewasa')
             ->where('hasPublishedResults', false)
+            ->has('results', 11)
+            ->where('results.0.slug', 'tiara-febrianti')
         );
+
+        $this->get(route('public.voting.show', [
+            'category' => 'mojang-dewasa',
+            'name' => 'tiara-febrianti',
+        ]))->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Public/Voting/Show')
+                ->where('participant.slug', 'tiara-febrianti')
+                ->where('participant.qrisImage', '/qr/MD/Tiara_Febrianti.jpg')
+            );
 
         $this->get(route('public.voting.show', [
             'category' => 'mojang-dewasa',
