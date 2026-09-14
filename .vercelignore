@@ -1,0 +1,23 @@
+# Vercel builds the Laravel service from laravel/.
+/public/
+/src/
+/drizzle/
+/node_modules/
+/.next/
+/.env*
+/scripts/
+/docs/
+/plans/
+/CONTEXT.md
+/AGENTS.md
+
+# These dependencies and generated files are rebuilt inside Docker.
+/laravel/vendor/
+/laravel/node_modules/
+/laravel/public/build/
+/laravel/.env*
+/laravel/.agents/
+/laravel/.claude/
+/laravel/tests/
+/laravel/storage/logs/
+/laravel/storage/framework/
