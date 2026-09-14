@@ -353,9 +353,9 @@ test("publikasi berita memerlukan validasi lengkap dan memperbarui publishedAt s
 
     await db.insert(mediaAssets).values({
       id: "media-cover-1",
-      provider: "uploadthing",
+      provider: "r2",
       providerKey: "news-cover-key",
-      url: "https://utfs.io/f/news-cover.jpg",
+      url: "https://media.pamoka.test/f/news-cover.jpg",
       filename: "news-cover.jpg",
       mimeType: "image/jpeg",
       bytes: 204800,

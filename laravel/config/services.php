@@ -41,9 +41,13 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
-    'uploadthing' => [
-        'token' => env('UPLOADTHING_TOKEN'),
-        'callback_url' => env('UPLOADTHING_CALLBACK_URL'),
+    'r2' => [
+        'endpoint' => env('R2_ENDPOINT'),
+        'key' => env('R2_ACCESS_KEY_ID'),
+        'secret' => env('R2_SECRET_ACCESS_KEY'),
+        'bucket' => env('R2_BUCKET'),
+        'public_url' => env('R2_PUBLIC_URL'),
+        'region' => env('R2_REGION', 'auto'),
     ],
 
 ];

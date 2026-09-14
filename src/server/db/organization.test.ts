@@ -527,8 +527,8 @@ test("savePerson memvalidasi portrait sebagai aset gambar ready secara transaksi
     // 1. Aset pending (belum siap)
     await db.insert(mediaAssets).values({
       id: "asset-pending-1",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/pending.jpg",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/pending.jpg",
       filename: "pending.jpg",
       mimeType: "image/jpeg",
       bytes: 120000,
@@ -541,8 +541,8 @@ test("savePerson memvalidasi portrait sebagai aset gambar ready secara transaksi
     // 2. Aset non-image (dokumen PDF)
     await db.insert(mediaAssets).values({
       id: "asset-pdf-1",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/document.pdf",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/document.pdf",
       filename: "document.pdf",
       mimeType: "application/pdf",
       bytes: 500000,
@@ -555,8 +555,8 @@ test("savePerson memvalidasi portrait sebagai aset gambar ready secara transaksi
     // 3. Aset gambar ready
     await db.insert(mediaAssets).values({
       id: "asset-ready-1",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/ready.jpg",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/ready.jpg",
       filename: "ready.jpg",
       mimeType: "image/jpeg",
       bytes: 250000,

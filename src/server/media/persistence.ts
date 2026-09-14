@@ -5,7 +5,7 @@ import type { Database } from "@/server/db/queries";
 import { mediaAssets } from "@/server/db/schema";
 
 export type PersistUploadedMediaAssetInput = {
-  provider: "uploadthing";
+  provider: "r2";
   providerKey: string;
   url: string;
   filename: string;
@@ -76,7 +76,7 @@ export async function persistUploadedMediaAsset(
         folderId: input.folderId,
       },
       changedFields: ["provider", "providerKey", "url", "lifecycle", "folderId"],
-      source: "uploadthing-callback",
+      source: "r2-upload",
     });
     return {
       mediaAssetId,

@@ -176,9 +176,9 @@ test("sponsors mendukung logoMediaId yang terhubung ke mediaAsset", async () => 
 
     await db.insert(mediaAssets).values({
       id: "med-logo-bjb",
-      provider: "uploadthing",
+      provider: "r2",
       providerKey: "pk-bjb",
-      url: "https://utfs.io/f/bjb-logo.png",
+      url: "https://media.pamoka.test/f/bjb-logo.png",
       filename: "bjb-logo.png",
       mimeType: "image/png",
       bytes: 24500,
@@ -216,7 +216,7 @@ test("sponsors mendukung logoMediaId yang terhubung ke mediaAsset", async () => 
 
     assert.ok(row);
     assert.equal(row.name, "Bank BJB");
-    assert.equal(row.logoUrl, "https://utfs.io/f/bjb-logo.png");
+    assert.equal(row.logoUrl, "https://media.pamoka.test/f/bjb-logo.png");
     assert.equal(row.logoMimeType, "image/png");
   } finally {
     client.close();

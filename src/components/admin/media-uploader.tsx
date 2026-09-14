@@ -5,13 +5,12 @@ import { type ChangeEvent, type DragEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { useUploadThing } from "@/lib/uploadthing";
+import { uploadR2MediaFiles } from "@/lib/r2-media";
 import { cn } from "@/lib/utils";
 import { mediaPolicy, type MediaUploadKind } from "@/server/media/policy";
 import {
   mediaUploadAccept,
   mediaSizeLabel,
-  parseUploadedMediaIdentity,
   validateMediaFiles,
   type UploadedMediaIdentity,
 } from "@/server/media/upload-validation";
@@ -54,25 +53,23 @@ export function AdminMediaUploader({
   const uploadKind = allowedKinds.includes(selectedKind) ? selectedKind : (allowedKinds[0] ?? "image");
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inputAccept = mediaUploadAccept(uploadKind);
-  const { startUpload, isUploading } = useUploadThing(uploadKind, {
-    onClientUploadComplete: (responses) => {
-      const identities = responses
-        .map((response) => parseUploadedMediaIdentity(response.serverData))
-        .filter((identity): identity is UploadedMediaIdentity => identity !== null);
+  const startUpload = async () => {
+    if (files.length === 0 || isUploading) return;
+    setIsUploading(true);
+    try {
+      const identities = await uploadR2MediaFiles(uploadKind, files, folderId);
       setFiles([]);
       onUploaded?.(identities);
-      if (identities.length !== responses.length) {
-        toast.error("Identitas upload belum lengkap. Periksa pustaka media.");
-        return;
-      }
       toast.success(`${identities.length} media berhasil diunggah`);
-    },
-    onUploadError: (error) => {
-      toast.error(error.message || "Upload media gagal");
-    },
-  });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload media gagal");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   if (!canManage) return null;
 
@@ -184,7 +181,7 @@ export function AdminMediaUploader({
           type="button"
           disabled={files.length === 0 || isUploading}
           className="mt-2 h-8 bg-dgb px-3 text-xs text-white hover:bg-dgb-600"
-          onClick={() => void startUpload(files, { folderId })}
+          onClick={() => void startUpload()}
         >
           {isUploading ? "Mengunggah..." : files.length > 0 ? `Unggah ${files.length} file` : "Pilih file dahulu"}
         </Button>

@@ -6,7 +6,7 @@ Dokumen ini adalah checklist; menjalankannya pada staging/production memerlukan 
 
 - Google OAuth client ID/secret dan callback untuk setiap domain: `/api/auth/callback/google`.
 - `BETTER_AUTH_SECRET`, URL aplikasi publik, URL/token database Turso production.
-- Token UploadThing, domain delivery yang diizinkan, serta konfirmasi quota bucket.
+- `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL`, CORS bucket, domain delivery, serta konfirmasi quota bucket.
 - Email Google calon super admin yang sudah pernah login; promosi dilakukan manual dengan `bootstrap-super-admin.md`.
 - Mapping setiap sponsor lama ke salah satu tier: utama, pendukung, pendamping, pelengkap.
 - Lokasi backup repo/bundle, snapshot Turso, target deployment, maintenance window, dan penanggung jawab rollback.

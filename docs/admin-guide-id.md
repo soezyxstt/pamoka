@@ -2,7 +2,7 @@
 
 Panduan operasional sistem manajemen konten (CMS) resmi **Paguyuban Mojang Jajaka Kabupaten Garut (PAMOKA Garut)**.
 
-> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, slice authoring konten utama, serta boundary upload UploadThing. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
+> Catatan migrasi: panduan ini masih mendeskripsikan CMS Next.js yang menjadi sumber perilaku pembanding. Sidecar Laravel di `laravel/` sudah memiliki fondasi Google OAuth, approval akses, RBAC, audit log, konteks edisi aktif, slice authoring konten utama, serta boundary upload R2. Modul CMS lain masih dimigrasikan bertahap dan runtime publik belum diganti.
 
 ---
 
@@ -184,12 +184,12 @@ Pada Stage 9H, workflow ini sudah tersedia sebagai halaman Inertia React Laravel
 
 Menu **Pustaka Media** (`/admin/media`):
 1. **Folder Edisi & Global**: Buat folder khusus edisi untuk mengelompokkan aset tahunan atau folder global untuk aset bersama.
-2. **Upload Berbasis UploadThing**: Sidecar Laravel menyediakan endpoint kompatibel UploadThing pada `/api/uploadthing` dan uploader React pada halaman ini. Gambar dibatasi 20 MB per file dan maksimal 10 file, video 512 MB dan maksimal 1 file, sedangkan PDF 64 MB dan maksimal 5 file. Permission `media.manage` diperlukan untuk meminta URL unggah.
+2. **Upload Berbasis R2**: Sidecar Laravel menyediakan endpoint `/api/media/upload/prepare` dan `/api/media/upload/complete`; uploader React mengirim bytes langsung ke URL PUT bertanda tangan R2. Gambar dibatasi 20 MB per file dan maksimal 10 file, video 512 MB dan maksimal 1 file, sedangkan PDF 64 MB dan maksimal 5 file. Permission `media.manage` diperlukan untuk meminta URL unggah.
 3. **Manajemen Aset**: Pada sidecar Laravel, filter media `ready`, cari nama file atau alt text, edit alt text, tandai gambar dekoratif, dan pindahkan aset antar folder tanpa merusak referensi tautan.
-4. **Callback dan audit**: Callback provider diverifikasi dengan HMAC, lalu aset disimpan sebagai `uploadthing` dengan lifecycle `ready`, idempotensi berdasarkan provider key, dan audit `media.upload.complete` dalam transaksi.
-5. **Konfigurasi provider**: Isi `UPLOADTHING_TOKEN` pada `laravel/.env`. Jika aplikasi diakses dari jaringan publik, isi `UPLOADTHING_CALLBACK_URL` dengan URL HTTPS yang dapat dijangkau UploadThing. Laravel tidak menulis blob ke disk lokal, S3, atau R2.
+4. **Verifikasi dan audit**: Setelah PUT selesai, endpoint complete melakukan `HEAD` ke object R2, mencocokkan ukuran dan MIME, lalu menandai aset `ready` secara idempotent dan menulis audit `media.upload.complete` dalam transaksi.
+5. **Konfigurasi provider**: Isi `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, dan `R2_PUBLIC_URL` pada `laravel/.env` atau environment deployment; `R2_REGION` default-nya `auto`. Laravel tidak menulis blob ke disk lokal.
 
-Pengujian lokal menggunakan fake provider dan database `pamoka_test`. Handshake unggah ke provider eksternal belum dijalankan pada tahap ini karena memerlukan target provider dan callback publik yang ditentukan operator.
+Pengujian lokal menggunakan fake R2 client dan database `pamoka_test`. Handshake bucket, CORS, dan domain delivery R2 belum dijalankan karena memerlukan target provider yang ditentukan operator.
 
 ---
 

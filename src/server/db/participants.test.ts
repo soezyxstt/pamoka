@@ -304,9 +304,9 @@ test("participantMedia mendukung multi-role dan sinkronisasi otomatis ke portrai
 
     // Insert media assets
     await db.insert(mediaAssets).values([
-      { id: "med-closeup-1", provider: "uploadthing", url: "https://utfs.io/f/closeup1.jpg", filename: "closeup1.jpg", mimeType: "image/jpeg", bytes: 120000, lifecycle: "ready", createdAt: now, updatedAt: now },
-      { id: "med-fullbody-1", provider: "uploadthing", url: "https://utfs.io/f/fullbody1.jpg", filename: "fullbody1.jpg", mimeType: "image/jpeg", bytes: 240000, lifecycle: "ready", createdAt: now, updatedAt: now },
-      { id: "med-karantina-1", provider: "uploadthing", url: "https://utfs.io/f/karantina1.jpg", filename: "karantina1.jpg", mimeType: "image/jpeg", bytes: 180000, lifecycle: "ready", createdAt: now, updatedAt: now },
+      { id: "med-closeup-1", provider: "r2", url: "https://media.pamoka.test/f/closeup1.jpg", filename: "closeup1.jpg", mimeType: "image/jpeg", bytes: 120000, lifecycle: "ready", createdAt: now, updatedAt: now },
+      { id: "med-fullbody-1", provider: "r2", url: "https://media.pamoka.test/f/fullbody1.jpg", filename: "fullbody1.jpg", mimeType: "image/jpeg", bytes: 240000, lifecycle: "ready", createdAt: now, updatedAt: now },
+      { id: "med-karantina-1", provider: "r2", url: "https://media.pamoka.test/f/karantina1.jpg", filename: "karantina1.jpg", mimeType: "image/jpeg", bytes: 180000, lifecycle: "ready", createdAt: now, updatedAt: now },
     ]);
 
     await db.insert(participants).values({
@@ -359,7 +359,7 @@ test("participantMedia mendukung multi-role dan sinkronisasi otomatis ke portrai
 
     assert.equal(mediaWithAssets.length, 3);
     assert.equal(mediaWithAssets[0].role, "closeup");
-    assert.equal(mediaWithAssets[0].url, "https://utfs.io/f/closeup1.jpg");
+    assert.equal(mediaWithAssets[0].url, "https://media.pamoka.test/f/closeup1.jpg");
     assert.equal(mediaWithAssets[1].role, "full_body");
     assert.equal(mediaWithAssets[2].role, "karantina");
   } finally {
@@ -404,8 +404,8 @@ test("pengikatan QRIS dan transaksi diaudit secara transaksional", async () => {
 
     await db.insert(mediaAssets).values({
       id: "med-qris-01",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/qris01.png",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/qris01.png",
       filename: "qris01.png",
       mimeType: "image/png",
       bytes: 45000,

@@ -23,7 +23,7 @@ import { AdminButton, AdminInput, AdminSelect } from "@/components/admin/primiti
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { useUploadThing } from "@/lib/uploadthing";
+import { uploadR2MediaFiles } from "@/lib/r2-media";
 import { cn } from "@/lib/utils";
 import {
   createMediaFolderAction,
@@ -107,16 +107,22 @@ function MediaUploader({ folderId, folderName }: { folderId: string | null; fold
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const { startUpload, isUploading } = useUploadThing("image", {
-    onClientUploadComplete: () => {
+  const [isUploading, setIsUploading] = useState(false);
+
+  const startUpload = async () => {
+    if (files.length === 0 || isUploading) return;
+    setIsUploading(true);
+    try {
+      await uploadR2MediaFiles("image", files, folderId);
       setFiles([]);
       toast.success("Media berhasil diunggah");
       router.refresh();
-    },
-    onUploadError: (error) => {
-      toast.error(error.message || "Upload media gagal");
-    },
-  });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload media gagal");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const addFiles = (incoming: File[]) => {
     const images = incoming.filter((file) => file.type.startsWith("image/"));
@@ -194,7 +200,7 @@ function MediaUploader({ folderId, folderName }: { folderId: string | null; fold
             type="button"
             disabled={!files.length || isUploading}
             className="mt-3 h-9 rounded-md bg-dgb px-4 text-xs hover:bg-dgb-600"
-            onClick={() => startUpload(files, { folderId })}
+            onClick={() => void startUpload()}
           >
             {isUploading ? "Mengunggah..." : files.length ? `Unggah ${files.length} file` : "Pilih file dahulu"}
           </Button>

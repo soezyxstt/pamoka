@@ -23,14 +23,14 @@ use App\Http\Controllers\AdminVotingController;
 use App\Http\Controllers\Auth\GoogleAuthenticationController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PublicPageController;
-use App\Http\Controllers\UploadThingController;
+use App\Http\Controllers\R2StorageController;
 use App\Http\Middleware\EnsureAdminAccess;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', HomeController::class)->name('home');
 
-Route::get('/api/uploadthing', [UploadThingController::class, 'metadata'])->name('uploadthing.endpoint');
-Route::post('/api/uploadthing', [UploadThingController::class, 'handle'])->name('uploadthing.action');
+Route::post('/api/media/upload/prepare', [R2StorageController::class, 'prepare'])->name('r2.upload.prepare');
+Route::post('/api/media/upload/complete', [R2StorageController::class, 'complete'])->name('r2.upload.complete');
 
 Route::get('/admin/login', [GoogleAuthenticationController::class, 'showLogin'])->name('admin.login');
 Route::get('/auth/google/redirect', [GoogleAuthenticationController::class, 'redirectToGoogle'])->name('auth.google.redirect');

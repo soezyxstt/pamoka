@@ -89,7 +89,7 @@ test("update metadata mediaAsset memperbarui alt dan decorative secara transaksi
 
     await db.insert(mediaAssets).values({
       id: "asset-1",
-      provider: "uploadthing",
+      provider: "r2",
       providerKey: "key-1",
       url: "https://example.com/photo.webp",
       filename: "photo.webp",
@@ -155,7 +155,7 @@ test("filter query media asset membedakan jenis MIME dan folder", async () => {
     await db.insert(mediaAssets).values([
       {
         id: "img-1",
-        provider: "uploadthing",
+        provider: "r2",
         url: "https://example.com/img1.jpg",
         filename: "img1.jpg",
         mimeType: "image/jpeg",
@@ -167,7 +167,7 @@ test("filter query media asset membedakan jenis MIME dan folder", async () => {
       },
       {
         id: "vid-1",
-        provider: "uploadthing",
+        provider: "r2",
         url: "https://example.com/video.mp4",
         filename: "video.mp4",
         mimeType: "video/mp4",
@@ -179,7 +179,7 @@ test("filter query media asset membedakan jenis MIME dan folder", async () => {
       },
       {
         id: "pdf-1",
-        provider: "uploadthing",
+        provider: "r2",
         url: "https://example.com/doc.pdf",
         filename: "doc.pdf",
         mimeType: "application/pdf",
@@ -231,13 +231,13 @@ test("listMediaAssets menerapkan scope edisi dan pagination di query production"
       { id: "folder-2025", name: "2025", slug: "2025", editionId: "ed-2025", createdAt: base, updatedAt: base },
     ]);
     await db.insert(mediaAssets).values([
-      { id: "asset-root", provider: "uploadthing", providerKey: "key-root", url: "https://example.com/root.webp", filename: "root.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: null, createdAt: date(1), updatedAt: date(1) },
-      { id: "asset-global", provider: "uploadthing", providerKey: "key-global", url: "https://example.com/global.webp", filename: "global.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-global", createdAt: date(2), updatedAt: date(2) },
-      { id: "asset-2024", provider: "uploadthing", providerKey: "key-2024", url: "https://example.com/2024.webp", filename: "2024.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-2024", createdAt: date(3), updatedAt: date(3) },
-      { id: "asset-2025-new", provider: "uploadthing", providerKey: "key-2025-new", url: "https://example.com/2025-new.webp", filename: "2025-new.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-2025", createdAt: date(4), updatedAt: date(4) },
-      { id: "asset-2025-old", provider: "uploadthing", providerKey: "key-2025-old", url: "https://example.com/2025-old.webp", filename: "2025-old.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-2025", createdAt: date(0), updatedAt: date(0) },
-      { id: "asset-2025-video", provider: "uploadthing", providerKey: "key-2025-video", url: "https://example.com/2025.mp4", filename: "2025.mp4", mimeType: "video/mp4", bytes: 1, lifecycle: "ready", folderId: "folder-2025", createdAt: date(5), updatedAt: date(5) },
-      { id: "asset-2025-draft", provider: "uploadthing", providerKey: "key-2025-draft", url: "https://example.com/2025-draft.webp", filename: "2025-draft.webp", mimeType: "image/webp", bytes: 1, lifecycle: "draft", folderId: "folder-2025", createdAt: date(6), updatedAt: date(6) },
+      { id: "asset-root", provider: "r2", providerKey: "key-root", url: "https://example.com/root.webp", filename: "root.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: null, createdAt: date(1), updatedAt: date(1) },
+      { id: "asset-global", provider: "r2", providerKey: "key-global", url: "https://example.com/global.webp", filename: "global.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-global", createdAt: date(2), updatedAt: date(2) },
+      { id: "asset-2024", provider: "r2", providerKey: "key-2024", url: "https://example.com/2024.webp", filename: "2024.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-2024", createdAt: date(3), updatedAt: date(3) },
+      { id: "asset-2025-new", provider: "r2", providerKey: "key-2025-new", url: "https://example.com/2025-new.webp", filename: "2025-new.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-2025", createdAt: date(4), updatedAt: date(4) },
+      { id: "asset-2025-old", provider: "r2", providerKey: "key-2025-old", url: "https://example.com/2025-old.webp", filename: "2025-old.webp", mimeType: "image/webp", bytes: 1, lifecycle: "ready", folderId: "folder-2025", createdAt: date(0), updatedAt: date(0) },
+      { id: "asset-2025-video", provider: "r2", providerKey: "key-2025-video", url: "https://example.com/2025.mp4", filename: "2025.mp4", mimeType: "video/mp4", bytes: 1, lifecycle: "ready", folderId: "folder-2025", createdAt: date(5), updatedAt: date(5) },
+      { id: "asset-2025-draft", provider: "r2", providerKey: "key-2025-draft", url: "https://example.com/2025-draft.webp", filename: "2025-draft.webp", mimeType: "image/webp", bytes: 1, lifecycle: "draft", folderId: "folder-2025", createdAt: date(6), updatedAt: date(6) },
     ]);
 
     const firstPage = await listMediaAssets(db, { folderScope: "edition", editionId: "ed-2025", type: "image", limit: 1, page: 0 });
@@ -309,9 +309,9 @@ test("persistUploadedMediaAsset mengembalikan identitas stabil dan audit hanya s
     });
 
     const input = {
-      provider: "uploadthing" as const,
+      provider: "r2" as const,
       providerKey: "ut-key-1",
-      url: "https://utfs.io/f/photo.webp",
+      url: "https://media.pamoka.test/f/photo.webp",
       filename: "photo.webp",
       mimeType: "image/webp",
       bytes: 2048,
@@ -369,12 +369,12 @@ test("validasi upload production menerapkan MIME dan cap finite untuk semua tipe
   assert.deepEqual(capped.truncated.map((file) => file.name), ["image-10.webp"]);
   assert.equal(mediaSizeLabel("pdf"), "64 MB");
 
-  assert.deepEqual(parseUploadedMediaIdentity({ mediaAssetId: "asset-1", provider: "uploadthing", providerKey: "key-1", url: " https://utfs.io/f/asset-1 " }), {
+  assert.deepEqual(parseUploadedMediaIdentity({ mediaAssetId: "asset-1", provider: "r2", providerKey: "key-1", url: " https://media.pamoka.test/f/asset-1 " }), {
     mediaAssetId: "asset-1",
-    provider: "uploadthing",
+    provider: "r2",
     providerKey: "key-1",
-    url: "https://utfs.io/f/asset-1",
+    url: "https://media.pamoka.test/f/asset-1",
   });
-  assert.equal(parseUploadedMediaIdentity({ mediaAssetId: "", provider: "uploadthing", providerKey: "key-1", url: "https://utfs.io/f/asset-1" }), null);
+  assert.equal(parseUploadedMediaIdentity({ mediaAssetId: "", provider: "r2", providerKey: "key-1", url: "https://media.pamoka.test/f/asset-1" }), null);
   assert.equal(parseUploadedMediaIdentity({ mediaAssetId: "asset-1", provider: "other", providerKey: "key-1", url: "https://example.com/asset-1" }), null);
 });

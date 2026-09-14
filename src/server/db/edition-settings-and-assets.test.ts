@@ -76,7 +76,7 @@ test("editions mendukung logoMediaId, slogan, organizationPeriodId, dan version"
     // Insert dummy media asset
     await db.insert(mediaAssets).values({
       id: "med-logo-1",
-      provider: "uploadthing",
+      provider: "r2",
       providerKey: "pk-1",
       url: "https://example.com/logo-2026.png",
       filename: "logo-2026.png",
@@ -265,7 +265,7 @@ test("siteAssetBindings mendukung binding, altOverride, focal point, unique slot
     await db.insert(mediaAssets).values([
       {
         id: "med-hero-bg",
-        provider: "uploadthing",
+        provider: "r2",
         providerKey: "pk-hero-bg",
         url: "https://example.com/hero.jpg",
         filename: "hero.jpg",
@@ -276,7 +276,7 @@ test("siteAssetBindings mendukung binding, altOverride, focal point, unique slot
       },
       {
         id: "med-video-jd",
-        provider: "uploadthing",
+        provider: "r2",
         providerKey: "pk-video-jd",
         url: "https://example.com/jd.mp4",
         filename: "jd.mp4",

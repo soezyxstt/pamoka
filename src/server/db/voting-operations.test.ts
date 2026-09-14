@@ -62,8 +62,8 @@ async function createTestDatabase() {
   await db.insert(mediaAssets).values([
     {
       id: "qris-a",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/qris-a.png",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/qris-a.png",
       filename: "qris-a.png",
       mimeType: "image/png",
       bytes: 100,
@@ -73,8 +73,8 @@ async function createTestDatabase() {
     },
     {
       id: "qris-pdf",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/qris.pdf",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/qris.pdf",
       filename: "qris.pdf",
       mimeType: "application/pdf",
       bytes: 100,

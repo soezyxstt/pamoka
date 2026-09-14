@@ -209,8 +209,8 @@ test("galleryItems dimasukkan ke gallery yang sama tanpa duplikasi album", async
     await db.insert(mediaAssets).values([
       {
         id: "media-img-1",
-        provider: "uploadthing",
-        url: "https://utfs.io/f/img1.webp",
+        provider: "r2",
+        url: "https://media.pamoka.test/f/img1.webp",
         filename: "img1.webp",
         mimeType: "image/webp",
         bytes: 120000,
@@ -219,8 +219,8 @@ test("galleryItems dimasukkan ke gallery yang sama tanpa duplikasi album", async
       },
       {
         id: "media-img-2",
-        provider: "uploadthing",
-        url: "https://utfs.io/f/img2.webp",
+        provider: "r2",
+        url: "https://media.pamoka.test/f/img2.webp",
         filename: "img2.webp",
         mimeType: "image/webp",
         bytes: 150000,
@@ -308,8 +308,8 @@ test("galleryItems mewajibkan tepat satu sumber", async () => {
     });
     await db.insert(mediaAssets).values({
       id: "media-source-check",
-      provider: "uploadthing",
-      url: "https://utfs.io/f/source.webp",
+      provider: "r2",
+      url: "https://media.pamoka.test/f/source.webp",
       filename: "source.webp",
       mimeType: "image/webp",
       bytes: 10,

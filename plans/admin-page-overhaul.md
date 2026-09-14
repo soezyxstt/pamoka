@@ -12,7 +12,7 @@ Kriteria keberhasilan utama:
 - Tidak ada lagi field `Edisi` pada form di modul tersebut.
 - `Kepengurusan` tetap global dan tidak berubah ketika selector edisi diganti.
 - Halaman, hero, dan section tidak dapat dibuat bebas. Admin hanya dapat mengisi teks atau media pada slot yang sudah didefinisikan aplikasi.
-- Semua pemilihan gambar memakai reusable media picker yang dapat memilih aset lama atau mengunggah aset baru melalui UploadThing.
+- Semua pemilihan gambar memakai reusable media picker yang dapat memilih aset lama atau mengunggah aset baru melalui R2 dengan presigned PUT.
 - Public routes, halaman `/galeri`, public reader, upload aset hardcoded, import data 2025, dan cutover public tidak termasuk plan ini. Bagian tersebut harus dikerjakan langsung oleh primary GPT dalam plan terpisah.
 
 Audit menemukan `plans/README.md` dan dokumen Plan 007 sampai 011 tidak tersedia di worktree, walaupun `AGENTS.md` mewajibkannya. Implementasi tidak boleh dimulai sebelum sumber plan tersebut dipulihkan. AGY juga tidak dapat dijalankan karena pembatasan profil dan jaringan host; user telah memberi fallback eksplisit agar audit plan dilanjutkan oleh GPT.
@@ -27,7 +27,7 @@ Setelah setiap checkpoint, eksekutor wajib:
 2. Menjelaskan perubahan skema, permission, route, dan perilaku UI.
 3. Melaporkan hasil test, lint, typecheck, build, dan pemeriksaan migration yang dijalankan.
 4. Menyertakan screenshot desktop dan 380 px jika checkpoint mengubah UI.
-5. Menyebutkan pekerjaan yang belum diverifikasi, termasuk runtime UploadThing atau database remote.
+5. Menyebutkan pekerjaan yang belum diverifikasi, termasuk handshake R2 atau database remote.
 6. Memastikan tidak ada upload, deploy, migration remote, atau public cutover.
 7. Berhenti dan bertanya secara eksplisit apakah boleh lanjut ke checkpoint berikutnya.
 
@@ -41,7 +41,7 @@ Aturan teknis yang tidak dapat dinegosiasikan:
 - Heading menggunakan Montserrat; body dan kontrol menggunakan Inter; gunakan `dgb`, `fb`, dan semantic tokens. Jangan meniru tampilan admin lama yang slate-heavy.
 - UI Bahasa Indonesia, sentence case, tanpa tanda seru, tanpa em dash atau en dash.
 - Semua gambar menggunakan `next/image`.
-- Upload hanya melalui UploadThing. Tidak boleh ada R2, S3, local blob, atau endpoint upload tanpa autentikasi.
+- Upload hanya melalui endpoint R2 terautentikasi. Tidak boleh ada local blob atau endpoint upload tanpa autentikasi.
 - Setiap write wajib memakai permission server, validasi server, transaksi Drizzle, `appendAuditLog`, optimistic version jika mengubah record, dan `revalidatePath`.
 - Schema hanya diedit melalui `src/server/db/schema.ts`. Jalankan `npm.cmd run db:generate`, periksa SQL yang dihasilkan, lalu `npm.cmd run db:check`. Jangan mengedit SQL migration secara manual.
 - Migration production, upload massal, perubahan Turso remote, deploy, dan cutover memerlukan izin terpisah yang menyebut hostname dan migration.
@@ -172,7 +172,7 @@ Kolom `participants.stage` lama dipetakan ke stage buatan per edisi saat migrati
 - Tepat satu stage per edisi dapat ditandai sebagai tahap final. Penandaan ini dapat diubah selama belum dipakai oleh gelar atau kampanye voting.
 - Setiap peserta pada tahap final harus menerima minimal satu gelar sebelum kesiapan penyematan dinyatakan lengkap. Peserta dapat menerima beberapa gelar.
 - Gelar tidak dibatasi kategori. Capacity adalah jumlah maksimum penerima gelar tersebut untuk seluruh kategori.
-- QRIS dibuat di luar website. Admin hanya mengunggah atau memilih gambar ready dari UploadThing melalui media picker. Website tidak menyediakan generator QRIS atau field tautan pembayaran baru.
+- QRIS dibuat di luar website. Admin hanya mengunggah atau memilih gambar ready dari R2 melalui media picker. Website tidak menyediakan generator QRIS atau field tautan pembayaran baru.
 - Kampanye voting dibuat per edisi, memilih satu stage sebagai sumber eligibility, lalu dimulai dan ditutup manual.
 - Saat kampanye dimulai, sistem membuat snapshot peserta aktif dari stage sumber. Perubahan stage setelah itu tidak mengubah daftar peserta voting kampanye tersebut.
 - Kampanye tidak dapat dimulai tanpa peserta. Peserta tanpa QRIS tetap masuk snapshot, tetapi ditandai belum siap dan tidak dapat menerima tally sampai gambar QRIS dipasang.
@@ -575,7 +575,7 @@ Plan admin dinyatakan selesai hanya jika:
 - Semua route edition-scoped memakai satu context server yang sama.
 - Tidak ada form edition-scoped yang menerima `editionId` bebas dari browser.
 - Semua gambar konten dapat dibind ke `mediaAsset`.
-- Tidak ada upload di luar UploadThing.
+- Tidak ada upload di luar flow R2 terautentikasi.
 - Tidak ada entity mutation tanpa permission, transaksi, dan audit.
 - Semua UI dapat dipakai pada 380 px dan desktop.
 - Berita dapat ditulis lengkap tanpa HTML atau Markdown.

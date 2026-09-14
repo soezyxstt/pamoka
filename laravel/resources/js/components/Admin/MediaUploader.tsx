@@ -2,18 +2,21 @@ import { useRef, useState } from 'react'
 
 type UploadKind = 'image' | 'video' | 'pdf'
 
-type UploadThingConfig = {
+type R2Config = {
     enabled: boolean
-    endpoint: string
-    version: string
+    prepareEndpoint: string
+    completeEndpoint: string
     routes: string[]
 }
 
-type PresignedFile = {
+type PreparedFile = {
+    assetId: string
     url: string
     key: string
     name: string
-    customId: string | null
+    mimeType: string
+    bytes: number
+    headers: Record<string, string>
 }
 
 const policies: Record<UploadKind, { accept: string; maxFiles: number; maxBytes: number; label: string }> = {
@@ -27,7 +30,7 @@ export default function MediaUploader({
     folderId,
     onUploaded,
 }: {
-    config: UploadThingConfig
+    config: R2Config
     folderId: string | null
     onUploaded: () => void
 }) {
@@ -39,13 +42,13 @@ export default function MediaUploader({
     const policy = policies[kind]
 
     if (!config.enabled) {
-        return <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Token UploadThing belum dikonfigurasi pada sidecar Laravel. Pustaka tetap dapat mengelola aset yang sudah tersedia.</div>
+        return <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">R2 belum dikonfigurasi pada sidecar Laravel. Pustaka tetap dapat mengelola aset yang sudah tersedia.</div>
     }
 
     const upload = async (files: File[]) => {
         setError(null)
         setStatus(null)
-        const rejected = files.find((file) => file.size > policy.maxBytes || !file.type.split('/')[0])
+        const invalidSize = files.find((file) => file.size <= 0 || file.size > policy.maxBytes)
         const invalidMime = files.find((file) => !acceptedMime(kind, file.type))
         if (files.length < 1) {
             setError('Pilih minimal satu file.')
@@ -55,7 +58,7 @@ export default function MediaUploader({
             setError(`Maksimal ${policy.maxFiles} file untuk ${policy.label}.`)
             return
         }
-        if (rejected) {
+        if (invalidSize) {
             setError(`Ada file yang melebihi batas ${formatBytes(policy.maxBytes)}.`)
             return
         }
@@ -66,52 +69,58 @@ export default function MediaUploader({
 
         setProcessing(true)
         try {
-            const response = await fetch(`${config.endpoint}?slug=${kind}&actionType=upload`, {
+            const response = await fetch(config.prepareEndpoint, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                     Accept: 'application/json',
                     'Content-Type': 'application/json',
-                    'X-UploadThing-Package': 'uploadthing/laravel-inertia',
-                    'X-UploadThing-Version': config.version,
                 },
                 body: JSON.stringify({
+                    kind,
+                    folderId,
                     files: files.map((file) => ({
                         name: file.name,
                         size: file.size,
                         type: file.type,
-                        lastModified: file.lastModified,
                     })),
-                    input: { folderId },
                 }),
             })
             const responseData = await response.json().catch(() => null)
-            if (!response.ok || !Array.isArray(responseData)) {
+            if (!response.ok || !Array.isArray(responseData?.files)) {
                 throw new Error(readMessage(responseData) ?? 'Pendaftaran unggah ditolak.')
             }
 
-            const presigned = responseData as PresignedFile[]
-            if (presigned.length !== files.length || presigned.some((item) => typeof item?.url !== 'string')) {
+            const prepared = responseData.files as PreparedFile[]
+            if (prepared.length !== files.length || prepared.some((item) => typeof item?.url !== 'string' || typeof item?.assetId !== 'string')) {
                 throw new Error('Respons URL unggah tidak lengkap.')
             }
 
-            for (const [index, item] of presigned.entries()) {
+            for (const [index, item] of prepared.entries()) {
                 const file = files[index]
                 if (!file) continue
-                const formData = new FormData()
-                formData.append('file', file)
                 const uploadResponse = await fetch(item.url, {
                     method: 'PUT',
-                    headers: {
-                        Range: 'bytes=0-',
-                        'X-UploadThing-Version': config.version,
-                    },
-                    body: formData,
+                    headers: item.headers,
+                    body: file,
                 })
-                const uploadData = await uploadResponse.json().catch(() => null)
-                if (!uploadResponse.ok || isErrorResponse(uploadData)) {
-                    throw new Error(readMessage(uploadData) ?? `Unggah ${file.name} gagal.`)
+                if (!uploadResponse.ok) {
+                    throw new Error(`Unggah ${file.name} ke R2 gagal.`)
                 }
+            }
+
+            const completeResponse = await fetch(config.completeEndpoint, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ assetIds: prepared.map((item) => item.assetId) }),
+            })
+            const completeData = await completeResponse.json().catch(() => null)
+            if (!completeResponse.ok || !Array.isArray(completeData?.assets)) {
+                throw new Error(readMessage(completeData) ?? 'Verifikasi unggah R2 gagal.')
             }
 
             setStatus(`${files.length} file berhasil diunggah. Daftar aset diperbarui.`)
@@ -132,7 +141,7 @@ export default function MediaUploader({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
                 <h2 className="font-montserrat text-base font-semibold text-dgb-900">Unggah media</h2>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">File dikirim langsung ke UploadThing. Aset baru masuk setelah callback provider tervalidasi.</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">File dikirim langsung ke R2. Aset baru masuk setelah objek diverifikasi oleh Laravel.</p>
             </div>
             <div className="grid gap-1 text-xs font-semibold text-dgb-900">
                 <label htmlFor="media-upload-kind">Jenis media</label>
@@ -162,10 +171,6 @@ function formatBytes(bytes: number): string {
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
 
     return `${Math.round(bytes / (1024 * 1024))} MB`
-}
-
-function isErrorResponse(value: unknown): boolean {
-    return typeof value === 'object' && value !== null && 'error' in value
 }
 
 function readMessage(value: unknown): string | null {

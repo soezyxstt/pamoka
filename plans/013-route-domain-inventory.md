@@ -11,7 +11,7 @@ Stage ini bersifat dokumentasi dan audit read-only. Tidak ada penghapusan source
 - Terdapat 47 file `page.tsx` di bawah `src/app`.
 - Terdapat 33 route admin, 10 route publik pada source utama, 1 route operasional monitor, dan 3 route internal atau legacy.
 - Terdapat 4 layout Next.js.
-- Terdapat 2 route handler API dan 1 konfigurasi handler UploadThing.
+- Terdapat 2 route handler API; satu untuk Better Auth dan satu untuk boundary upload R2.
 - Skema Drizzle memiliki 48 tabel SQLite yang terbagi ke domain auth, CMS, organisasi, seleksi, galeri, voting, dan kompatibilitas legacy.
 - Public runtime masih dominan memakai data hardcoded dari `src/lib`. CMS readers sudah tersedia, tetapi public cutover belum diizinkan.
 - `/monitor` masih membaca tabel legacy `Semifinalist`, `Finalist`, dan `IncomePerDate`.
@@ -65,8 +65,7 @@ Layout yang harus dipetakan ke layout Inertia:
 Endpoint yang perlu memiliki keputusan pengganti:
 
 - `src/app/api/auth/[...all]/route.ts` untuk Better Auth dan Google OAuth
-- `src/app/api/uploadthing/route.ts` untuk upload media
-- `src/app/api/uploadthing/core.ts` sebagai konfigurasi policy upload
+- `src/app/api/media/upload/route.ts` untuk prepare dan complete upload media R2
 
 ## Peta domain
 
@@ -115,7 +114,7 @@ Tabel yang terkait: `user`, `session`, `account`, `verification`, `adminProfile`
 | Admin CMS | `src/server/db/schema.ts`, `src/server/cms`, `src/server/auth`, dan route admin | Kontrak permission, audit, lifecycle, serta scope edisi harus dipertahankan. |
 | Peserta legacy | `src/lib/data.ts` dan tabel legacy | Data lama tidak boleh hilang sebelum read model baru terbukti setara. |
 | Monitoring | `getFinalistsWithIncome` dan tabel income legacy | Tidak dapat dipindahkan hanya dengan menyalin halaman karena perhitungan dan access boundary harus ikut diuji. |
-| Auth dan upload | Better Auth, Google OAuth, UploadThing | Penggantian provider atau session tanpa parity checkpoint dapat memutus akses admin dan aset. |
+| Auth dan upload | Better Auth, Google OAuth, R2 | Perubahan provider atau session tanpa parity checkpoint dapat memutus akses admin dan aset. |
 
 ## Urutan migration slice
 

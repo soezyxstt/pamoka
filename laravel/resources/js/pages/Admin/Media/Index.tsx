@@ -57,10 +57,10 @@ type Props = {
     total: number
     hasMore: boolean
     canManage: boolean
-    uploadThing: {
+    r2: {
         enabled: boolean
-        endpoint: string
-        version: string
+        prepareEndpoint: string
+        completeEndpoint: string
         routes: string[]
     }
 }
@@ -83,7 +83,7 @@ export default function Index({
     total,
     hasMore,
     canManage,
-    uploadThing,
+    r2,
 }: Props) {
     const [search, setSearch] = useState(initialSearch)
     const folderRows = useMemo(() => flattenFolders(folders), [folders])
@@ -120,7 +120,7 @@ export default function Index({
                     <Stat label="Halaman" value={page} />
                 </div>
 
-                {canManage && <div className="mt-6"><MediaUploader config={uploadThing} folderId={uploadFolderId} onUploaded={() => router.reload({ only: ['assets', 'folders', 'total'] })} /></div>}
+                {canManage && <div className="mt-6"><MediaUploader config={r2} folderId={uploadFolderId} onUploaded={() => router.reload({ only: ['assets', 'folders', 'total'] })} /></div>}
 
                 <div className="mt-5 grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
                     <aside className="grid content-start gap-5">

@@ -1,0 +1,16 @@
+.env*
+!.env.example
+.git
+.vercel
+node_modules
+vendor
+public/build
+database/*.sqlite
+storage/app/*
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+tests
+*.log
+.phpunit.result.cache

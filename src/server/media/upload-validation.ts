@@ -69,7 +69,7 @@ export function parseUploadedMediaIdentity(value: unknown): UploadedMediaIdentit
   if (
     typeof record.mediaAssetId !== "string" ||
     record.mediaAssetId.trim().length === 0 ||
-    record.provider !== "uploadthing" ||
+    record.provider !== "r2" ||
     typeof record.providerKey !== "string" ||
     record.providerKey.trim().length === 0 ||
     typeof record.url !== "string" ||
@@ -79,7 +79,7 @@ export function parseUploadedMediaIdentity(value: unknown): UploadedMediaIdentit
   }
   return {
     mediaAssetId: record.mediaAssetId.trim(),
-    provider: "uploadthing",
+    provider: "r2",
     providerKey: record.providerKey.trim(),
     url: record.url.trim(),
   };
